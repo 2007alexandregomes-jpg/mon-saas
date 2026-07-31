@@ -3,19 +3,26 @@ import fs from "node:fs/promises";
 import ffmpegPath from "ffmpeg-static";
 import { run } from "./run";
 
+/** Images par seconde. 2 suffit à ne rater aucun changement de texte à l'écran. */
+const FRAMES_PER_SECOND = 2;
+
+/** Plafond de sécurité : au-delà, le coût d'analyse grimpe sans rien apporter. */
+const MAX_FRAMES = 60;
+
+/** Largeur des images envoyées à Claude. Assez pour lire un sous-titre TikTok. */
+const FRAME_WIDTH = 512;
+
 /**
- * Extrait des images réparties régulièrement dans la vidéo.
+ * Extrait des images tout au long de la vidéo.
  *
- * Pourquoi des images fixes plutôt que la vidéo entière : Claude analyse des
- * images. Six instantanés bien répartis suffisent à décrire le cadrage, les
- * mouvements de caméra, l'éclairage et le texte incrusté à l'écran.
+ * Pourquoi des images fixes : Claude analyse des images, pas des vidéos. À 2
+ * images/seconde, on capture chaque plan, chaque coupe et surtout chaque
+ * changement de texte incrusté — c'est là que se trouve une grosse partie du
+ * script des publicités TikTok.
  */
 export async function extractFrames(
   videoPath: string,
-  {
-    count = 6,
-    durationSeconds,
-  }: { count?: number; durationSeconds: number | null },
+  { durationSeconds }: { durationSeconds: number | null },
 ): Promise<string[]> {
   if (!ffmpegPath) {
     throw new Error("ffmpeg est introuvable (paquet ffmpeg-static absent ?).");
@@ -24,11 +31,12 @@ export async function extractFrames(
   const outputDir = path.join(path.dirname(videoPath), "frames");
   await fs.mkdir(outputDir, { recursive: true });
 
-  // Sans durée connue, on retombe sur « une image toutes les 2 secondes ».
-  const filter =
-    durationSeconds && durationSeconds > 0
-      ? `fps=${count / durationSeconds}`
-      : "fps=0.5";
+  // Si la vidéo est longue, on baisse la cadence pour rester sous le plafond
+  // plutôt que de tronquer et perdre toute la fin.
+  const fps =
+    durationSeconds && durationSeconds * FRAMES_PER_SECOND > MAX_FRAMES
+      ? MAX_FRAMES / durationSeconds
+      : FRAMES_PER_SECOND;
 
   await run(
     ffmpegPath,
@@ -36,14 +44,14 @@ export async function extractFrames(
       "-i",
       videoPath,
       "-vf",
-      `${filter},scale=768:-2`, // 768 px de large : assez pour Claude, léger à envoyer
+      `fps=${fps.toFixed(4)},scale=${FRAME_WIDTH}:-2`,
       "-frames:v",
-      String(count),
+      String(MAX_FRAMES),
       "-q:v",
-      "3",
-      path.join(outputDir, "frame-%02d.jpg"),
+      "4",
+      path.join(outputDir, "frame-%03d.jpg"),
     ],
-    { timeoutMs: 120_000 },
+    { timeoutMs: 180_000 },
   );
 
   const files = (await fs.readdir(outputDir))

@@ -48,8 +48,10 @@ const SYSTEM_PROMPT = `Tu es directeur créatif spécialisé en publicité vidé
 
 On te donne des images extraites d'une publicité qui fonctionne, et les informations d'un autre produit. Ton travail :
 
+Les images te sont données dans l'ordre chronologique, à cadence régulière : leur numéro te dit où tu en es dans la vidéo. Utilise-les pour suivre le déroulé, pas seulement pour juger l'esthétique.
+
 1. Décrire précisément le style visuel : mouvements de caméra, éclairage, rythme, mise en scène.
-2. Reconstituer la structure du script (accroche, argumentaire, appel à l'action) à partir du texte visible à l'écran, du titre et de la description.
+2. Reconstituer la structure du script (accroche, argumentaire, appel à l'action) en croisant TROIS sources : la transcription de ce qui est dit, le texte incrusté à l'écran, et le titre/description. Cite le phrasé réel de l'accroche — c'est ce qui fait s'arrêter le pouce.
 3. Réécrire ce script pour le produit du client — même structure et même énergie, mais un contenu qui lui est propre. Jamais de copie mot à mot, jamais de mention de la marque concurrente.
 4. Rédiger un prompt en anglais pour un modèle image-to-video, décrivant uniquement le mouvement de caméra et le rendu visuel à appliquer à la photo du produit.
 
@@ -58,13 +60,15 @@ On te donne des images extraites d'une publicité qui fonctionne, et les informa
 Si les images ne permettent pas de conclure sur un point, dis-le franchement plutôt que d'inventer.`;
 
 export type AnalyzeInput = {
-  /** Les images extraites, encodées en base64. */
+  /** Les images extraites, encodées en base64, dans l'ordre chronologique. */
   frames: string[];
   /** Métadonnées récupérées par yt-dlp — souvent riches en texte du script. */
   video: {
     title: string | null;
     description: string | null;
     durationSeconds: number | null;
+    /** Le texte parlé : sous-titres de la plateforme ou transcription. */
+    transcript: string | null;
   };
   product: {
     name: string;
@@ -85,9 +89,14 @@ export async function analyzeVideo({
   const client = new Anthropic();
 
   const context = [
-    `Durée de la vidéo : ${video.durationSeconds ? `${Math.round(video.durationSeconds)} s` : "inconnue"}`,
+    "VIDÉO DE RÉFÉRENCE",
+    `Durée : ${video.durationSeconds ? `${Math.round(video.durationSeconds)} s` : "inconnue"}`,
+    `Images fournies : ${frames.length}, réparties dans l'ordre chronologique.`,
     video.title ? `Titre : ${video.title}` : null,
     video.description ? `Description : ${video.description}` : null,
+    video.transcript
+      ? `\nCE QUI EST DIT À L'ORAL (transcription) :\n${video.transcript}`
+      : "\nAucune transcription disponible : reconstitue le script à partir du texte visible à l'écran, du titre et de la description, et signale-le dans `notes`.",
     "",
     "PRODUIT DU CLIENT",
     `Nom : ${product.name}`,

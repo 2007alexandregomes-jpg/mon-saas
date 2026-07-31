@@ -16,7 +16,40 @@ export type VideoInfo = {
   description: string | null;
   durationSeconds: number | null;
   uploader: string | null;
+  /**
+   * Le texte parlé, si la plateforme fournit des sous-titres (automatiques ou
+   * non). `null` quand il n'y en a pas — il faudra alors transcrire l'audio.
+   */
+  subtitles: string | null;
 };
+
+/**
+ * Convertit un fichier WebVTT en texte suivi.
+ *
+ * Un .vtt alterne horodatages et répliques, et répète souvent la même ligne
+ * d'un bloc à l'autre (effet machine à écrire des sous-titres automatiques).
+ * On ne garde que le texte, sans les doublons consécutifs.
+ */
+function vttToText(vtt: string): string {
+  const lines: string[] = [];
+
+  for (const raw of vtt.split(/\r?\n/)) {
+    const line = raw
+      .replace(/<[^>]+>/g, "") // balises de karaoké <00:00:01.000>
+      .trim();
+
+    if (!line) continue;
+    if (line === "WEBVTT") continue;
+    if (line.startsWith("NOTE") || line.startsWith("Kind:")) continue;
+    if (line.startsWith("Language:")) continue;
+    if (line.includes("-->")) continue; // ligne d'horodatage
+    if (/^\d+$/.test(line)) continue; // numéro de bloc
+
+    if (lines[lines.length - 1] !== line) lines.push(line);
+  }
+
+  return lines.join(" ").trim();
+}
 
 export class VideoDownloadError extends Error {
   constructor(
@@ -117,6 +150,14 @@ export async function downloadVideo(
         "--no-warnings",
         "--max-filesize",
         "200M",
+        // Sous-titres : ceux de l'auteur ET ceux générés automatiquement.
+        // C'est le texte parlé, gratuitement, quand la plateforme le fournit.
+        "--write-subs",
+        "--write-auto-subs",
+        "--sub-langs",
+        "fr,fr-*,en,en-*",
+        "--sub-format",
+        "vtt/best",
         "-o",
         outputTemplate,
         url,
@@ -133,14 +174,29 @@ export async function downloadVideo(
   }
 
   const files = await fs.readdir(workDir);
-  const downloaded = files.find((f) => f.startsWith("source."));
+
+  const downloaded = files.find(
+    (f) => f.startsWith("source.") && !f.endsWith(".vtt"),
+  );
   if (!downloaded) {
     await fs.rm(workDir, { recursive: true, force: true });
     throw new VideoDownloadError("Aucun fichier vidéo n'a été récupéré.");
   }
 
+  // Le français d'abord s'il existe, sinon n'importe quelle langue trouvée.
+  const subtitleFile =
+    files.find((f) => f.endsWith(".vtt") && f.includes(".fr")) ??
+    files.find((f) => f.endsWith(".vtt"));
+
+  let subtitles: string | null = null;
+  if (subtitleFile) {
+    const text = vttToText(await fs.readFile(path.join(workDir, subtitleFile), "utf8"));
+    subtitles = text.length > 0 ? text : null;
+  }
+
   return {
     ...meta,
+    subtitles,
     filePath: path.join(workDir, downloaded),
     cleanup: () => fs.rm(workDir, { recursive: true, force: true }),
   };
