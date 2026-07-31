@@ -2,7 +2,11 @@ import { downloadVideo } from "@/lib/video/download";
 import { extractFrames, frameToBase64 } from "@/lib/video/frames";
 import { extractAudio, hasAudioTrack } from "@/lib/video/audio";
 import { transcribeAudio } from "@/lib/ai/transcribe";
-import { analyzeVideo, type VideoAnalysis } from "@/lib/ai/analyze-video";
+import {
+  analyzeVideo,
+  type AnalysisUsage,
+  type VideoAnalysis,
+} from "@/lib/ai/analyze-video";
 
 /**
  * Le pipeline complet : d'un lien TikTok à un script réécrit.
@@ -17,6 +21,7 @@ import { analyzeVideo, type VideoAnalysis } from "@/lib/ai/analyze-video";
 
 export type PipelineResult = {
   analysis: VideoAnalysis;
+  usage: AnalysisUsage;
   /** Comment on a obtenu le texte parlé — utile pour diagnostiquer. */
   transcriptSource: "sous-titres" | "transcription" | "aucun";
   frameCount: number;
@@ -36,10 +41,13 @@ export type ProgressStep =
 export async function analyzeCompetitorVideo({
   url,
   product,
+  options,
   onProgress,
 }: {
   url: string;
   product: { name: string; description: string | null };
+  /** `forceVoiceover` : le client veut une voix off même si la référence est muette. */
+  options?: { forceVoiceover?: boolean };
   onProgress?: (step: ProgressStep) => void;
 }): Promise<PipelineResult> {
   onProgress?.("téléchargement");
@@ -77,7 +85,7 @@ export async function analyzeCompetitorVideo({
 
     // --- L'analyse ---
     onProgress?.("analyse");
-    const analysis = await analyzeVideo({
+    const { analysis, usage } = await analyzeVideo({
       frames,
       video: {
         title: video.title,
@@ -86,10 +94,12 @@ export async function analyzeCompetitorVideo({
         transcript,
       },
       product,
+      options,
     });
 
     return {
       analysis,
+      usage,
       transcriptSource,
       frameCount: frames.length,
       video: {

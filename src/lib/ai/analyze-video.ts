@@ -6,9 +6,8 @@ import { z } from "zod";
  * Analyse une vidéo publicitaire concurrente et réécrit son script pour le
  * produit du client.
  *
- * Claude ne lit pas les vidéos : on lui envoie des images extraites, plus le
- * titre et la description récupérés par yt-dlp. Six images bien réparties
- * suffisent à décrire le cadrage, les mouvements et le texte à l'écran.
+ * Claude ne lit pas les vidéos : on lui envoie des images extraites, le texte
+ * parlé (sous-titres ou transcription), plus le titre et la description.
  */
 
 /**
@@ -16,6 +15,23 @@ import { z } from "zod";
  * de JSON approximatif à rattraper avec des expressions régulières.
  */
 const AnalysisSchema = z.object({
+  /**
+   * Constat AVANT réécriture : par quels canaux la référence fait-elle passer
+   * son message ? C'est ce constat qui détermine la forme de l'adaptation.
+   */
+  referenceFormat: z.object({
+    hasSpokenScript: z
+      .boolean()
+      .describe("true si quelqu'un parle dans la vidéo de référence"),
+    hasOnScreenText: z
+      .boolean()
+      .describe("true s'il y a du texte incrusté à l'écran"),
+    summary: z
+      .string()
+      .describe(
+        "En une phrase : par quels moyens la vidéo transmet son message (image seule, voix off, texte incrusté, musique…)",
+      ),
+  }),
   style: z.object({
     camera: z.string().describe("Mouvements et angles de caméra observés"),
     lighting: z.string().describe("Éclairage, palette de couleurs, ambiance"),
@@ -28,9 +44,9 @@ const AnalysisSchema = z.object({
     cta: z.string().describe("L'appel à l'action final"),
   }),
   adaptedScript: z.object({
-    hook: z.string().describe("Accroche réécrite pour le produit du client"),
-    body: z.string().describe("Argumentaire réécrit pour le produit du client"),
-    cta: z.string().describe("Appel à l'action réécrit"),
+    hook: z.string().describe("Accroche adaptée au produit du client"),
+    body: z.string().describe("Partie centrale adaptée au produit du client"),
+    cta: z.string().describe("Conclusion adaptée au produit du client"),
   }),
   higgsfieldPrompt: z
     .string()
@@ -44,20 +60,53 @@ const AnalysisSchema = z.object({
 
 export type VideoAnalysis = z.infer<typeof AnalysisSchema>;
 
-const SYSTEM_PROMPT = `Tu es directeur créatif spécialisé en publicité vidéo courte (TikTok, Reels, Shorts).
+export type AnalysisUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  /** Coût estimé en dollars, aux tarifs Claude Opus 5. */
+  costUsd: number;
+};
 
-On te donne des images extraites d'une publicité qui fonctionne, et les informations d'un autre produit. Ton travail :
+/** Tarifs Claude Opus 5, en dollars par million de tokens. */
+const PRICE_PER_MTOK = { input: 5, output: 25 };
+
+const BASE_PROMPT = `Tu es directeur créatif spécialisé en publicité vidéo courte (TikTok, Reels, Shorts).
+
+On te donne des images extraites d'une publicité qui fonctionne, le texte parlé quand il existe, et les informations d'un autre produit.
 
 Les images te sont données dans l'ordre chronologique, à cadence régulière : leur numéro te dit où tu en es dans la vidéo. Utilise-les pour suivre le déroulé, pas seulement pour juger l'esthétique.
 
-1. Décrire précisément le style visuel : mouvements de caméra, éclairage, rythme, mise en scène.
-2. Reconstituer la structure du script (accroche, argumentaire, appel à l'action) en croisant TROIS sources : la transcription de ce qui est dit, le texte incrusté à l'écran, et le titre/description. Cite le phrasé réel de l'accroche — c'est ce qui fait s'arrêter le pouce.
-3. Réécrire ce script pour le produit du client — même structure et même énergie, mais un contenu qui lui est propre. Jamais de copie mot à mot, jamais de mention de la marque concurrente.
-4. Rédiger un prompt en anglais pour un modèle image-to-video, décrivant uniquement le mouvement de caméra et le rendu visuel à appliquer à la photo du produit.
+Ton travail :
 
-Écris les scripts en français, dans le ton de la vidéo de référence. Sois concret : "travelling avant lent sur le produit posé sur un plan de travail en marbre, lumière rasante dorée" plutôt que "belle esthétique".
+1. CONSTATER la forme de la référence : y a-t-il quelqu'un qui parle ? du texte incrusté ? ou l'image et la musique portent-elles seules le message ? Remplis \`referenceFormat\` en premier, honnêtement.
+2. Décrire précisément le style visuel : mouvements de caméra, éclairage, rythme, mise en scène.
+3. Reconstituer la structure de la référence (accroche, partie centrale, conclusion) en croisant TROIS sources : la transcription, le texte incrusté, le titre/description. Cite le phrasé réel de l'accroche quand il existe — c'est ce qui fait s'arrêter le pouce.
+4. Adapter cette structure au produit du client.
+5. Rédiger un prompt en anglais pour un modèle image-to-video, décrivant uniquement le mouvement de caméra et le rendu visuel à appliquer à la photo du produit.
+
+Écris en français, dans le ton de la vidéo de référence. Sois concret : "travelling avant lent sur le produit posé sur un plan de travail en marbre, lumière rasante dorée" plutôt que "belle esthétique".
 
 Si les images ne permettent pas de conclure sur un point, dis-le franchement plutôt que d'inventer.`;
+
+/** Règle par défaut : l'adaptation reproduit la forme de la référence. */
+const MATCH_FORM_RULE = `
+RÈGLE ABSOLUE SUR LA FORME DE L'ADAPTATION
+
+\`adaptedScript\` doit utiliser EXACTEMENT les mêmes canaux que la référence. Tu ne changes pas le format, tu changes le produit.
+
+- Si \`hasSpokenScript\` est false : n'invente AUCUNE voix off, AUCUN dialogue, AUCUNE réplique. Les trois champs décrivent alors ce qu'on VOIT et ce qu'on ENTEND (musique, ambiance), plan par plan. Écris "Plan 1 : …" et non une phrase à prononcer.
+- Si \`hasOnScreenText\` est false : n'ajoute aucun texte incrusté.
+- Si la référence parle : écris les répliques, avec le même registre et la même longueur.
+
+Une publicité muette qui fonctionne, fonctionne PARCE QU'elle est muette. Y ajouter une voix off, c'est en changer la nature — et ce n'est pas ce qu'on te demande.`;
+
+/** Variante quand le client demande explicitement une voix off. */
+const FORCE_VOICEOVER_RULE = `
+FORME DE L'ADAPTATION
+
+Le client demande explicitement une voix off, même si la référence n'en a pas.
+
+Reprends le rythme, le découpage et l'ambiance de la référence, et écris par-dessus un script parlé : une phrase courte par plan, calée sur les temps du montage. Reste sobre — la voix accompagne l'image, elle ne la commente pas.`;
 
 export type AnalyzeInput = {
   /** Les images extraites, encodées en base64, dans l'ordre chronologique. */
@@ -74,13 +123,22 @@ export type AnalyzeInput = {
     name: string;
     description: string | null;
   };
+  options?: {
+    /**
+     * `false` (défaut) : l'adaptation reproduit la forme de la référence —
+     * muette si la référence est muette.
+     * `true` : le client veut une voix off quoi qu'il arrive.
+     */
+    forceVoiceover?: boolean;
+  };
 };
 
 export async function analyzeVideo({
   frames,
   video,
   product,
-}: AnalyzeInput): Promise<VideoAnalysis> {
+  options,
+}: AnalyzeInput): Promise<{ analysis: VideoAnalysis; usage: AnalysisUsage }> {
   if (frames.length === 0) {
     throw new Error("Aucune image à analyser.");
   }
@@ -95,8 +153,8 @@ export async function analyzeVideo({
     video.title ? `Titre : ${video.title}` : null,
     video.description ? `Description : ${video.description}` : null,
     video.transcript
-      ? `\nCE QUI EST DIT À L'ORAL (transcription) :\n${video.transcript}`
-      : "\nAucune transcription disponible : reconstitue le script à partir du texte visible à l'écran, du titre et de la description, et signale-le dans `notes`.",
+      ? `\nBANDE SON / TEXTE PARLÉ (transcription automatique) :\n${video.transcript}\n\nAttention : cette transcription peut ne contenir que des paroles de musique. Des paroles de chanson ne sont PAS un script publicitaire — dans ce cas \`hasSpokenScript\` reste false.`
+      : "\nAucune transcription disponible : reconstitue la structure à partir du texte visible à l'écran, du titre et de la description, et signale-le dans `notes`.",
     "",
     "PRODUIT DU CLIENT",
     `Nom : ${product.name}`,
@@ -105,29 +163,36 @@ export async function analyzeVideo({
     .filter(Boolean)
     .join("\n");
 
+  const system =
+    BASE_PROMPT +
+    "\n" +
+    (options?.forceVoiceover ? FORCE_VOICEOVER_RULE : MATCH_FORM_RULE);
+
   const response = await client.messages.parse({
     model: "claude-opus-5",
     max_tokens: 16000,
-    system: SYSTEM_PROMPT,
+    system,
     output_config: { format: zodOutputFormat(AnalysisSchema) },
     messages: [
       {
         role: "user",
         content: [
-          ...frames.map((data, index) => [
-            {
-              type: "text" as const,
-              text: `Image ${index + 1} sur ${frames.length} :`,
-            },
-            {
-              type: "image" as const,
-              source: {
-                type: "base64" as const,
-                media_type: "image/jpeg" as const,
-                data,
+          ...frames
+            .map((data, index) => [
+              {
+                type: "text" as const,
+                text: `Image ${index + 1} sur ${frames.length} :`,
               },
-            },
-          ]).flat(),
+              {
+                type: "image" as const,
+                source: {
+                  type: "base64" as const,
+                  media_type: "image/jpeg" as const,
+                  data,
+                },
+              },
+            ])
+            .flat(),
           { type: "text", text: context },
         ],
       },
@@ -144,5 +209,20 @@ export async function analyzeVideo({
     throw new Error("L'analyse n'a pas renvoyé de résultat exploitable.");
   }
 
-  return response.parsed_output;
+  const inputTokens =
+    response.usage.input_tokens +
+    (response.usage.cache_read_input_tokens ?? 0) +
+    (response.usage.cache_creation_input_tokens ?? 0);
+  const outputTokens = response.usage.output_tokens;
+
+  return {
+    analysis: response.parsed_output,
+    usage: {
+      inputTokens,
+      outputTokens,
+      costUsd:
+        (inputTokens / 1_000_000) * PRICE_PER_MTOK.input +
+        (outputTokens / 1_000_000) * PRICE_PER_MTOK.output,
+    },
+  };
 }
