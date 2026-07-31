@@ -6,23 +6,45 @@
  * Par défaut, l'annonce générée reproduit la forme de la référence : muette si
  * la référence est muette. `--voix-off` force l'ajout d'un script parlé.
  *
- * Aucune image de produit n'est nécessaire ici : l'analyse travaille sur le nom
- * et la description. L'image ne servira qu'à la génération vidéo.
+ * `--photos` accepte des chemins de fichiers : Claude voit alors le vrai produit
+ * et désigne, pour chaque plan, la photo la plus proche du cadrage voulu.
  */
 
+import fs from "node:fs";
 import { analyzeCompetitorVideo } from "../src/lib/pipeline/analyze-competitor-video";
 
 const args = process.argv.slice(2);
 const forceVoiceover = args.includes("--voix-off");
-const [url, productName, productDescription] = args.filter(
-  (a) => !a.startsWith("--"),
-);
+
+/** `--photos a.jpg b.jpg` : les chemins des photos produit, séparés par des espaces. */
+const photosFlag = args.indexOf("--photos");
+const photoPaths =
+  photosFlag === -1
+    ? []
+    : args.slice(photosFlag + 1).filter((a) => !a.startsWith("--"));
+
+const positional = (
+  photosFlag === -1 ? args : args.slice(0, photosFlag)
+).filter((a) => !a.startsWith("--"));
+const [url, productName, productDescription] = positional;
 
 if (!url || !productName) {
   console.error(
-    'Usage : npm run analyze -- "<lien vidéo>" "<nom du produit>" ["description"] [--voix-off]',
+    'Usage : npm run analyze -- "<lien vidéo>" "<nom du produit>" ["description"] [--voix-off] [--photos photo1.jpg photo2.jpg]',
   );
   process.exit(1);
+}
+
+const productImages = photoPaths.map((p) => {
+  if (!fs.existsSync(p)) {
+    console.error(`❌ Photo introuvable : ${p}`);
+    process.exit(1);
+  }
+  return fs.readFileSync(p).toString("base64");
+});
+
+if (productImages.length > 0) {
+  console.log(`📷 ${productImages.length} photo(s) produit chargée(s)\n`);
 }
 
 const started = Date.now();
@@ -34,7 +56,11 @@ const elapsed = () => `${((Date.now() - started) / 1000).toFixed(1)}s`.padStart(
 async function main() {
   const result = await analyzeCompetitorVideo({
     url,
-    product: { name: productName, description: productDescription ?? null },
+    product: {
+      name: productName,
+      description: productDescription ?? null,
+      images: productImages,
+    },
     options: { forceVoiceover },
 
     // Chaque résultat est affiché dès qu'il existe, sans attendre la fin.
@@ -117,7 +143,14 @@ async function main() {
     console.log(`\n  ${"·".repeat(66)}`);
     console.log(`  PLAN ${i + 1} — ${shot.durationSeconds} s`);
     console.log(`  ${shot.description}`);
-    console.log(`\n    Image de départ : ${shot.referenceImage}`);
+    console.log(
+      `\n    Photo de départ : #${shot.sourceImageIndex}${
+        photoPaths[shot.sourceImageIndex]
+          ? ` (${photoPaths[shot.sourceImageIndex]})`
+          : " (aucune photo fournie)"
+      }`,
+    );
+    console.log(`    Image voulue    : ${shot.referenceImage}`);
     console.log(`    Mouvement       : ${shot.motionPrompt}`);
   });
 

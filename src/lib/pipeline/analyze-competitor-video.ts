@@ -72,7 +72,8 @@ export async function analyzeCompetitorVideo({
   onEvent,
 }: {
   url: string;
-  product: { name: string; description: string | null };
+  /** `images` : les photos du produit en base64, vues par Claude. */
+  product: { name: string; description: string | null; images?: string[] };
   /** `forceVoiceover` : le client veut une voix off même si la référence est muette. */
   options?: { forceVoiceover?: boolean };
   onEvent?: (event: PipelineEvent) => void;

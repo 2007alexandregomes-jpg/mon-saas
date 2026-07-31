@@ -85,6 +85,12 @@ const AnalysisSchema = z.object({
         .describe(
           "En ANGLAIS : UNIQUEMENT le mouvement à appliquer à cette image de départ — déplacement de caméra, rotation du produit, effets. Un seul mouvement continu, sans coupe. Pas de dialogue, pas de texte à l'écran.",
         ),
+      sourceImageIndex: z
+        .number()
+        .int()
+        .describe(
+          "Index (à partir de 0) de la photo produit fournie par le client qui servira de point de départ à ce plan — celle dont le cadrage et l'angle sont les plus proches de `referenceImage`. Si aucune photo n'a été fournie, mets 0.",
+        ),
     }),
   ),
   notes: z
@@ -168,6 +174,12 @@ export type AnalyzeInput = {
   product: {
     name: string;
     description: string | null;
+    /**
+     * Les photos du produit, en base64. Claude les voit : il adapte donc les
+     * plans à la géométrie réelle du produit, et désigne pour chaque plan la
+     * photo la plus proche du cadrage voulu.
+     */
+    images?: string[];
   };
   options?: {
     /**
@@ -205,6 +217,9 @@ export async function analyzeVideo({
     "PRODUIT DU CLIENT",
     `Nom : ${product.name}`,
     product.description ? `Description : ${product.description}` : null,
+    product.images?.length
+      ? `\n${product.images.length} photo(s) du produit te sont fournies ci-dessous, numérotées à partir de 0. Adapte les plans à la géométrie RÉELLE du produit que tu y vois, et pour chaque plan indique dans \`sourceImageIndex\` celle dont le cadrage et l'angle sont les plus proches de la \`referenceImage\` que tu décris.`
+      : "\nAucune photo du produit n'est fournie : mets 0 dans `sourceImageIndex` pour tous les plans.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -240,6 +255,21 @@ export async function analyzeVideo({
             ])
             .flat(),
           { type: "text", text: context },
+          // Les photos du produit viennent APRÈS le contexte : Claude a ainsi
+          // lu à quoi elles servent avant de les regarder.
+          ...(product.images ?? [])
+            .map((data, index) => [
+              { type: "text" as const, text: `Photo produit ${index} :` },
+              {
+                type: "image" as const,
+                source: {
+                  type: "base64" as const,
+                  media_type: "image/jpeg" as const,
+                  data,
+                },
+              },
+            ])
+            .flat(),
         ],
       },
     ],

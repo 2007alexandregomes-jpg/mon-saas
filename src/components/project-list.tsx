@@ -3,11 +3,15 @@ import { STATUS_LABELS, type Project, type ProjectStatus } from "@/lib/types";
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   pending:
     "bg-neutral-100 text-neutral-700 dark:bg-white/10 dark:text-neutral-300",
-  processing:
-    "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
+  analyzing: "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
+  generating:
+    "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",
   completed:
     "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300",
   failed: "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+  nsfw: "bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300",
+  canceled:
+    "bg-neutral-100 text-neutral-500 dark:bg-white/5 dark:text-neutral-400",
 };
 
 const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
