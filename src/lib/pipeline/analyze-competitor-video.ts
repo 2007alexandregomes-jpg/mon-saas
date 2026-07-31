@@ -17,51 +17,84 @@ import {
  *   3. Extraire les images
  *   4. Envoyer le tout à Claude
  *   5. Nettoyer les fichiers temporaires, quoi qu'il arrive
+ *
+ * Chaque résultat intermédiaire est émis DÈS QU'IL EXISTE via `onEvent`, sans
+ * attendre la fin : l'interface peut afficher le titre de la vidéo au bout de
+ * 30 secondes plutôt qu'une barre de chargement muette pendant deux minutes.
  */
+
+export type VideoMeta = {
+  title: string | null;
+  durationSeconds: number | null;
+  uploader: string | null;
+};
+
+export type TranscriptSource = "sous-titres" | "transcription" | "aucun";
+
+/**
+ * Ce que le pipeline raconte pendant qu'il travaille.
+ *
+ * Chaque étape émet `start` puis `done`. Les `done` transportent le résultat,
+ * ce qui permet de l'afficher immédiatement.
+ */
+export type PipelineEvent =
+  | { step: "téléchargement"; status: "start" }
+  | { step: "téléchargement"; status: "done"; video: VideoMeta }
+  | { step: "texte parlé"; status: "start" }
+  | {
+      step: "texte parlé";
+      status: "done";
+      source: TranscriptSource;
+      transcript: string | null;
+    }
+  | { step: "images"; status: "start" }
+  | { step: "images"; status: "done"; count: number }
+  | { step: "analyse"; status: "start" }
+  | {
+      step: "analyse";
+      status: "done";
+      analysis: VideoAnalysis;
+      usage: AnalysisUsage;
+    };
 
 export type PipelineResult = {
   analysis: VideoAnalysis;
   usage: AnalysisUsage;
-  /** Comment on a obtenu le texte parlé — utile pour diagnostiquer. */
-  transcriptSource: "sous-titres" | "transcription" | "aucun";
+  transcriptSource: TranscriptSource;
   frameCount: number;
-  video: {
-    title: string | null;
-    durationSeconds: number | null;
-    uploader: string | null;
-  };
+  video: VideoMeta;
 };
-
-export type ProgressStep =
-  | "téléchargement"
-  | "transcription"
-  | "extraction des images"
-  | "analyse";
 
 export async function analyzeCompetitorVideo({
   url,
   product,
   options,
-  onProgress,
+  onEvent,
 }: {
   url: string;
   product: { name: string; description: string | null };
   /** `forceVoiceover` : le client veut une voix off même si la référence est muette. */
   options?: { forceVoiceover?: boolean };
-  onProgress?: (step: ProgressStep) => void;
+  onEvent?: (event: PipelineEvent) => void;
 }): Promise<PipelineResult> {
-  onProgress?.("téléchargement");
+  onEvent?.({ step: "téléchargement", status: "start" });
   const video = await downloadVideo(url);
+
+  const videoMeta: VideoMeta = {
+    title: video.title,
+    durationSeconds: video.durationSeconds,
+    uploader: video.uploader,
+  };
+  onEvent?.({ step: "téléchargement", status: "done", video: videoMeta });
 
   try {
     // --- Le texte parlé ---
+    onEvent?.({ step: "texte parlé", status: "start" });
+
     let transcript = video.subtitles;
-    let transcriptSource: PipelineResult["transcriptSource"] = transcript
-      ? "sous-titres"
-      : "aucun";
+    let transcriptSource: TranscriptSource = transcript ? "sous-titres" : "aucun";
 
     if (!transcript && (await hasAudioTrack(video.filePath))) {
-      onProgress?.("transcription");
       try {
         const audioPath = await extractAudio(video.filePath);
         const text = await transcribeAudio(audioPath);
@@ -76,15 +109,23 @@ export async function analyzeCompetitorVideo({
       }
     }
 
+    onEvent?.({
+      step: "texte parlé",
+      status: "done",
+      source: transcriptSource,
+      transcript,
+    });
+
     // --- Les images ---
-    onProgress?.("extraction des images");
+    onEvent?.({ step: "images", status: "start" });
     const framePaths = await extractFrames(video.filePath, {
       durationSeconds: video.durationSeconds,
     });
     const frames = await Promise.all(framePaths.map(frameToBase64));
+    onEvent?.({ step: "images", status: "done", count: frames.length });
 
     // --- L'analyse ---
-    onProgress?.("analyse");
+    onEvent?.({ step: "analyse", status: "start" });
     const { analysis, usage } = await analyzeVideo({
       frames,
       video: {
@@ -96,17 +137,14 @@ export async function analyzeCompetitorVideo({
       product,
       options,
     });
+    onEvent?.({ step: "analyse", status: "done", analysis, usage });
 
     return {
       analysis,
       usage,
       transcriptSource,
       frameCount: frames.length,
-      video: {
-        title: video.title,
-        durationSeconds: video.durationSeconds,
-        uploader: video.uploader,
-      },
+      video: videoMeta,
     };
   } finally {
     // `finally` : les fichiers temporaires partent même si l'analyse plante.

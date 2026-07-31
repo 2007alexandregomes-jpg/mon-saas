@@ -5,6 +5,9 @@
  *
  * Par défaut, l'annonce générée reproduit la forme de la référence : muette si
  * la référence est muette. `--voix-off` force l'ajout d'un script parlé.
+ *
+ * Aucune image de produit n'est nécessaire ici : l'analyse travaille sur le nom
+ * et la description. L'image ne servira qu'à la génération vidéo.
  */
 
 import { analyzeCompetitorVideo } from "../src/lib/pipeline/analyze-competitor-video";
@@ -25,12 +28,45 @@ if (!url || !productName) {
 const started = Date.now();
 const rule = "─".repeat(70);
 
+/** Secondes écoulées depuis le lancement, pour voir où le temps passe. */
+const elapsed = () => `${((Date.now() - started) / 1000).toFixed(1)}s`.padStart(6);
+
 async function main() {
   const result = await analyzeCompetitorVideo({
     url,
     product: { name: productName, description: productDescription ?? null },
     options: { forceVoiceover },
-    onProgress: (step) => console.log(`⏳ ${step}…`),
+
+    // Chaque résultat est affiché dès qu'il existe, sans attendre la fin.
+    onEvent: (event) => {
+      if (event.status === "start") {
+        console.log(`[${elapsed()}] ⏳ ${event.step}…`);
+        return;
+      }
+
+      switch (event.step) {
+        case "téléchargement":
+          console.log(
+            `[${elapsed()}] ✓ « ${event.video.title?.slice(0, 55) ?? "sans titre"} » — ${event.video.durationSeconds ?? "?"} s, @${event.video.uploader ?? "?"}`,
+          );
+          break;
+        case "texte parlé":
+          console.log(
+            `[${elapsed()}] ✓ ${event.source}${
+              event.transcript
+                ? ` — « ${event.transcript.slice(0, 60).replace(/\s+/g, " ")}… »`
+                : ""
+            }`,
+          );
+          break;
+        case "images":
+          console.log(`[${elapsed()}] ✓ ${event.count} images extraites`);
+          break;
+        case "analyse":
+          console.log(`[${elapsed()}] ✓ analyse terminée`);
+          break;
+      }
+    },
   });
 
   const { analysis, usage } = result;
