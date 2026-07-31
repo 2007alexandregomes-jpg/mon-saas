@@ -106,8 +106,20 @@ async function main() {
   console.log(`  Corps     : ${analysis.adaptedScript.body}`);
   console.log(`  Conclusion: ${analysis.adaptedScript.cta}`);
 
-  console.log(`\n${rule}\nPROMPT HIGGSFIELD`);
-  console.log(`  ${analysis.higgsfieldPrompt}`);
+  const total = analysis.shots.reduce((s, shot) => s + shot.durationSeconds, 0);
+  console.log(
+    `\n${rule}\nDÉCOUPAGE POUR HIGGSFIELD — ${analysis.shots.length} plans, ${total} s au total`,
+  );
+  console.log(`\n  Signature visuelle (commune à tous les plans) :`);
+  console.log(`  ${analysis.visualSignature}`);
+
+  analysis.shots.forEach((shot, i) => {
+    console.log(`\n  ${"·".repeat(66)}`);
+    console.log(`  PLAN ${i + 1} — ${shot.durationSeconds} s`);
+    console.log(`  ${shot.description}`);
+    console.log(`\n    Image de départ : ${shot.referenceImage}`);
+    console.log(`    Mouvement       : ${shot.motionPrompt}`);
+  });
 
   console.log(`\n${rule}\nNOTES`);
   console.log(`  ${analysis.notes}`);

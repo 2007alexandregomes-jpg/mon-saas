@@ -48,11 +48,45 @@ const AnalysisSchema = z.object({
     body: z.string().describe("Partie centrale adaptée au produit du client"),
     cta: z.string().describe("Conclusion adaptée au produit du client"),
   }),
-  higgsfieldPrompt: z
+  /**
+   * La signature visuelle commune à tous les plans, en anglais.
+   *
+   * Elle est préfixée à chaque prompt de plan : c'est ce qui empêche les
+   * clips générés séparément de ressembler à cinq publicités différentes.
+   */
+  visualSignature: z
     .string()
     .describe(
-      "Prompt en ANGLAIS décrivant le mouvement de caméra et le style à appliquer à l'image du produit. Pas de dialogue, pas de texte à l'écran — uniquement le visuel et le mouvement.",
+      "En ANGLAIS, une phrase décrivant le rendu commun à TOUS les plans : type de rendu, palette, éclairage, ambiance. Sera préfixée à chaque prompt de plan pour garantir la cohérence.",
     ),
+  /**
+   * Le découpage plan par plan.
+   *
+   * Higgsfield génère un mouvement continu par appel : un plan = une
+   * génération. C'est ce découpage qui permet d'obtenir une vraie publicité
+   * montée plutôt qu'un seul mouvement confus.
+   */
+  shots: z.array(
+    z.object({
+      durationSeconds: z
+        .number()
+        .int()
+        .describe("Durée de ce plan en secondes (entre 3 et 8)"),
+      description: z
+        .string()
+        .describe("En FRANÇAIS : ce que le client verra à l'écran sur ce plan"),
+      referenceImage: z
+        .string()
+        .describe(
+          "En ANGLAIS : l'image FIXE de départ de ce plan — cadrage, angle, distance, position du produit, fond, éclairage. C'est le point de départ que l'animation va faire bouger. Chaque plan a le sien : un gros plan macro ne part pas de la même image qu'un plan large.",
+        ),
+      motionPrompt: z
+        .string()
+        .describe(
+          "En ANGLAIS : UNIQUEMENT le mouvement à appliquer à cette image de départ — déplacement de caméra, rotation du produit, effets. Un seul mouvement continu, sans coupe. Pas de dialogue, pas de texte à l'écran.",
+        ),
+    }),
+  ),
   notes: z
     .string()
     .describe("Ce qui rend cette publicité efficace, en une ou deux phrases"),
@@ -82,7 +116,19 @@ Ton travail :
 2. Décrire précisément le style visuel : mouvements de caméra, éclairage, rythme, mise en scène.
 3. Reconstituer la structure de la référence (accroche, partie centrale, conclusion) en croisant TROIS sources : la transcription, le texte incrusté, le titre/description. Cite le phrasé réel de l'accroche quand il existe — c'est ce qui fait s'arrêter le pouce.
 4. Adapter cette structure au produit du client.
-5. Rédiger un prompt en anglais pour un modèle image-to-video, décrivant uniquement le mouvement de caméra et le rendu visuel à appliquer à la photo du produit.
+5. Découper l'adaptation en PLANS pour la génération vidéo (voir ci-dessous).
+
+DÉCOUPAGE EN PLANS — point technique important
+
+La vidéo finale sera fabriquée plan par plan : un modèle image-to-video anime UNE image fixe en UN mouvement continu, sans coupe. Un plan = une génération.
+
+Produis entre 3 et 6 plans, dont les durées additionnées correspondent à la durée de la référence. Pour chaque plan :
+
+- \`referenceImage\` décrit l'IMAGE FIXE de départ : cadrage, angle, distance, position du produit dans le cadre, fond, éclairage. Chaque plan a la sienne, et elles doivent être NETTEMENT différentes les unes des autres — un gros plan macro sur une texture ne part pas de la même image qu'un plan large en lévitation. C'est ce qui donnera un vrai montage plutôt que cinq variantes du même cadrage.
+- \`motionPrompt\` décrit UNIQUEMENT ce qui bouge à partir de cette image : déplacement de caméra, rotation, effets. Un seul mouvement, aucune coupe, aucun changement de lieu.
+- \`visualSignature\` (au niveau racine) contient ce qui est COMMUN à tous les plans : type de rendu, palette, éclairage général. Ne le répète pas dans chaque plan.
+
+Écris \`referenceImage\`, \`motionPrompt\` et \`visualSignature\` en anglais. \`description\` en français.
 
 Écris en français, dans le ton de la vidéo de référence. Sois concret : "travelling avant lent sur le produit posé sur un plan de travail en marbre, lumière rasante dorée" plutôt que "belle esthétique".
 
