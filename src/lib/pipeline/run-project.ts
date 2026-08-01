@@ -24,10 +24,31 @@ import os from "node:os";
  * Client Supabase utilisable APRÈS la fin de la requête.
  *
  * Le client habituel lit les cookies à chaque appel — or les cookies n'existent
- * plus une fois la réponse envoyée. On fige donc le jeton de l'utilisateur au
- * moment du lancement.
+ * plus une fois la réponse envoyée.
+ *
+ * On utilise donc la CLÉ DE SERVICE, qui n'expire pas. Le jeton d'un
+ * utilisateur, lui, a une durée de vie limitée : un traitement de 8 à 30
+ * minutes lui survit, et les dernières écritures — dépôt de la vidéo, passage
+ * en « terminé » — échouent. C'est exactement ce qui s'est produit : la vidéo
+ * était montée, mais le projet restait figé sur « génération ».
+ *
+ * ⚠️ Cette clé contourne les politiques d'accès. Le code doit donc filtrer
+ * lui-même : ici, le chemin de dépôt vient du `user_id` lu sur le projet.
  */
 export function createDetachedClient(accessToken: string): SupabaseClient {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (serviceKey) {
+    return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+
+  // Repli : ça fonctionne, mais seulement tant que le jeton reste valide.
+  console.warn(
+    "SUPABASE_SERVICE_ROLE_KEY absente — repli sur le jeton de l'utilisateur. " +
+      "Les traitements longs échoueront à leur dernière étape quand il expirera.",
+  );
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
