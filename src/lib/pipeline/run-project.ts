@@ -68,9 +68,26 @@ async function fetchImage(url: string): Promise<{ buffer: Buffer; media: ImageMe
 export async function runProject(projectId: string, accessToken: string) {
   const supabase = createDetachedClient(accessToken);
 
-  /** Écrit l'avancement. Le trigger `updated_at` s'occupe de l'horodatage. */
-  const update = (patch: Partial<Project>) =>
-    supabase.from("projects").update(patch).eq("id", projectId);
+  /**
+   * Écrit l'avancement. Le trigger `updated_at` s'occupe de l'horodatage.
+   *
+   * Supabase ne LÈVE PAS d'exception quand une écriture échoue : il renvoie un
+   * objet `error`. Sans cette vérification, une écriture ratée passe inaperçue
+   * et le projet reste bloqué à son statut précédent pour toujours.
+   */
+  const update = async (patch: Partial<Project>) => {
+    const { error } = await supabase
+      .from("projects")
+      .update(patch)
+      .eq("id", projectId);
+
+    if (error) {
+      console.error(
+        `[projet ${projectId}] ÉCRITURE EN BASE REFUSÉE (${Object.keys(patch).join(", ")}) : ${error.message}`,
+      );
+      throw new Error(`Écriture en base impossible : ${error.message}`);
+    }
+  };
 
   const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "project-"));
 
@@ -203,11 +220,18 @@ export async function runProject(projectId: string, accessToken: string) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
+    // Tracé AVANT toute tentative d'écriture : si la base est justement ce qui
+    // ne répond plus, c'est la seule trace qui subsistera.
+    console.error(`[projet ${projectId}] ÉCHEC : ${message}`);
+
     // Le contenu refusé mérite son propre statut : ce n'est pas une panne, et
     // le message à afficher n'est pas le même.
     const status = /nsfw/i.test(message) ? "nsfw" : "failed";
 
-    await update({ status, error_message: message.slice(0, 1000) });
+    await supabase
+      .from("projects")
+      .update({ status, error_message: message.slice(0, 1000) })
+      .eq("id", projectId);
   } finally {
     await fs.rm(workDir, { recursive: true, force: true });
   }
