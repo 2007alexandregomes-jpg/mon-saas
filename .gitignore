@@ -48,3 +48,6 @@ next-env.d.ts
 
 # binaires telecharges (yt-dlp) — trop lourds pour git
 /bin/
+
+# sorties de test des scripts CLI
+/analyse*.json
