@@ -51,6 +51,8 @@ export function ProjectProgress({ project }: { project: Project }) {
   const [elapsed, setElapsed] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
+  const [recoverMessage, setRecoverMessage] = useState<string | null>(null);
   const triggered = useRef(false);
 
   // 1. Démarrer le traitement si personne ne l'a fait.
@@ -198,6 +200,45 @@ export function ProjectProgress({ project }: { project: Project }) {
         Environ 8 minutes au total. <strong>Tu peux fermer cette page</strong> —
         le travail continue sur nos serveurs, tu retrouveras ta vidéo ici.
       </p>
+
+      {/* Filet de sécurité : le montage se termine sur le disque avant d'être
+          déposé. Si le dépôt échoue, la vidéo existe mais le projet reste
+          marqué « en cours » — ce bouton va la chercher. */}
+      <div className="mt-3">
+        <button
+          type="button"
+          disabled={recovering}
+          onClick={async () => {
+            setRecovering(true);
+            setRecoverMessage(null);
+            try {
+              const response = await fetch(
+                `/api/projects/${project.id}/recover`,
+                { method: "POST" },
+              );
+              const body = await response.json();
+              if (!response.ok) {
+                setRecoverMessage(body.error ?? "Récupération impossible.");
+              } else {
+                setStatus("completed");
+                router.refresh();
+              }
+            } catch {
+              setRecoverMessage("Le serveur n'a pas répondu.");
+            } finally {
+              setRecovering(false);
+            }
+          }}
+          className="text-xs text-neutral-500 underline underline-offset-2 hover:text-neutral-800 disabled:opacity-50 dark:hover:text-neutral-200"
+        >
+          {recovering ? "Recherche…" : "Ça semble bloqué ? Récupérer la vidéo"}
+        </button>
+        {recoverMessage && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            {recoverMessage}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
