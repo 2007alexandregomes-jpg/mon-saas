@@ -82,18 +82,25 @@ async function mapWithLimit<T, R>(
   return results;
 }
 
-/** Traduit une indication de cadrage en zone de recadrage. */
+/**
+ * Traduit une indication de cadrage en zone de recadrage.
+ *
+ * Les zones sont volontairement SERRÉES et prises au cœur du vêtement : sur une
+ * photo de studio, tout ce qui dépasse du produit laisse voir le fond du
+ * plan-à-plat — un tapis gris au milieu d'une publicité tournée dehors se
+ * remarque immédiatement.
+ */
 function cropFromHint(hint: string) {
   const h = hint.toLowerCase();
-  // Un macro serré au centre convient à la matière ; un cadrage plus large
-  // pour un col ou une encolure, qui se situent en haut du vêtement.
+
   if (/col|encolure|neck|collar/.test(h)) {
-    return { x: 0.25, y: 0.05, width: 0.5, height: 0.35 };
+    return { x: 0.36, y: 0.16, width: 0.28, height: 0.2 };
   }
   if (/bouton|button|placket/.test(h)) {
-    return { x: 0.32, y: 0.25, width: 0.36, height: 0.5 };
+    return { x: 0.38, y: 0.34, width: 0.24, height: 0.28 };
   }
-  return { x: 0.3, y: 0.32, width: 0.42, height: 0.42 };
+  // Par défaut : plein cœur du vêtement, là où il n'y a que de la matière.
+  return { x: 0.36, y: 0.38, width: 0.28, height: 0.28 };
 }
 
 export async function remakeVideo({

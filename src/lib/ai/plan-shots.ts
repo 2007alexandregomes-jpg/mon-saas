@@ -14,8 +14,11 @@ import type { ImageMediaType, ProductImage } from "./analyze-video";
  *  - `card`  : carton de marque du concurrent → carton du client (0 $)
  *  - `drop`  : plan inexploitable → retiré du montage
  *
- * L'enjeu est autant économique qu'esthétique : envoyer un macro à un modèle
- * d'édition coûte de l'argent ET donne un moins bon résultat qu'un simple zoom.
+ * La priorité est la FIDÉLITÉ à la publicité d'origine, pas l'économie. Un
+ * plan fabriqué localement à partir d'une photo de studio ne partage ni le
+ * décor, ni la lumière, ni le grain de la vidéo : inséré au milieu d'un film
+ * tourné dehors, il se voit immédiatement. Il n'est donc acceptable que sur un
+ * macro de pure matière, où aucun décor n'est reconnaissable.
  */
 
 const TREATMENTS = ["edit", "still", "card", "drop"] as const;
@@ -83,9 +86,13 @@ Tu ne réinventes rien. Tu décides seulement, pour chaque plan, COMMENT y faire
 
 QUATRE TRAITEMENTS
 
-- \`edit\` — le produit d'origine est porté par quelqu'un, manipulé, ou mis en scène dans un décor réel. Un modèle d'édition vidéo remplacera le produit (et la personne si demandé) en conservant le décor et les gestes. C'est le seul traitement qui coûte de l'argent : ne le choisis que s'il est nécessaire.
+- \`edit\` — C'EST LE TRAITEMENT PAR DÉFAUT. Dès que le plan montre une personne, un décor identifiable, un mouvement de caméra dans une scène, ou le produit mis en situation, c'est \`edit\`. Il coûte de l'argent, et ce n'est pas un critère : la fidélité à la publicité d'origine passe avant l'économie.
 
-- \`still\` — gros plan ou macro sur la matière, la texture, un détail. Un lent zoom sur la photo du client donne un meilleur résultat, instantanément et gratuitement. Un modèle d'édition échoue d'ailleurs souvent sur ces plans : trop près, il ne reconnaît plus un vêtement mais une texture.
+- \`still\` — RÉSERVÉ aux macros de pure matière. Trois conditions doivent être réunies, sans exception :
+    1. le tissu remplit tout le cadre,
+    2. aucun décor n'est reconnaissable — ni ciel, ni feuillage, ni mur, ni sol, ni main, ni visage,
+    3. il ne se passe rien d'autre qu'un léger mouvement sur la matière.
+  Au moindre doute, choisis \`edit\`. Un plan fabriqué à partir d'une photo de studio n'a ni la lumière, ni le fond, ni le grain de la vidéo : glissé dans une publicité tournée dehors, il saute aux yeux et ruine la copie. Ne l'utilise que là où il n'y a littéralement rien d'autre à voir que du tissu.
 
 - \`card\` — carton-titre, logo, texte plein cadre appartenant au concurrent. À remplacer par celui du client. On ne peut évidemment pas conserver la marque d'un concurrent dans une publicité.
 
