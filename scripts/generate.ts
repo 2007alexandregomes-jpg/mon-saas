@@ -2,10 +2,13 @@
  * Génère la vidéo finale à partir d'une analyse enregistrée.
  *
  *   npm run analyze  -- "<lien>" "<produit>" "<desc>" --save analyse.json
- *   npm run generate -- analyse.json --images <url1> <url2> … [--model turbo]
+ *   npm run generate -- analyse.json --images photo1.jpg photo2.jpg [--model turbo]
  *
- * Les URL d'images doivent être PUBLIQUES : Higgsfield les télécharge depuis
- * ses propres serveurs. Chaque plan utilise celle que l'analyse lui a assignée
+ * `--images` accepte des CHEMINS DE FICHIERS ou des URL. Les fichiers locaux
+ * sont téléversés automatiquement — Higgsfield ne sait télécharger l'image de
+ * départ que depuis une adresse publique.
+ *
+ * Chaque plan utilise la photo que l'analyse lui a assignée
  * (`sourceImageIndex`) ; si l'index dépasse la liste, on retombe sur la
  * première.
  *
@@ -15,6 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { generateVideo } from "../src/lib/pipeline/generate-video";
+import { resolveImageUrls } from "../src/lib/higgsfield/upload";
 import type { ShotModel } from "../src/lib/higgsfield/generate-shot";
 
 type SavedAnalysis = {
@@ -37,22 +41,29 @@ function flagValues(name: string): string[] {
   return args.slice(at + 1).filter((a) => !a.startsWith("--"));
 }
 
-const imageUrls = flagValues("--images");
+const imageEntries = flagValues("--images");
 const model = (flagValues("--model")[0] ?? "turbo") as ShotModel;
 const outputArg = flagValues("--out")[0];
 
 const firstFlag = args.findIndex((a) => a.startsWith("--"));
 const analysisPath = (firstFlag === -1 ? args : args.slice(0, firstFlag))[0];
 
-if (!analysisPath || imageUrls.length === 0) {
+if (!analysisPath || imageEntries.length === 0) {
   console.error(
-    "Usage : npm run generate -- analyse.json --images <url1> [url2 …] [--model turbo|standard|lite] [--out video.mp4]",
+    "Usage : npm run generate -- analyse.json --images <photo.jpg|url> [...] [--model turbo|standard|lite] [--out video.mp4]",
   );
   process.exit(1);
 }
 if (!fs.existsSync(analysisPath)) {
   console.error(`❌ Fichier introuvable : ${analysisPath}`);
   process.exit(1);
+}
+
+for (const entry of imageEntries) {
+  if (!/^https?:\/\//i.test(entry) && !fs.existsSync(entry)) {
+    console.error(`❌ Photo introuvable : ${entry}`);
+    process.exit(1);
+  }
 }
 
 const saved = JSON.parse(fs.readFileSync(analysisPath, "utf8")) as SavedAnalysis;
@@ -67,16 +78,21 @@ const elapsed = () => `${((Date.now() - started) / 1000).toFixed(0)}s`.padStart(
 
 // Récapitulatif AVANT de dépenser quoi que ce soit.
 console.log(`\n${"═".repeat(70)}`);
-console.log(`${shots.length} plans · modèle « ${model} » · ${imageUrls.length} image(s)`);
+console.log(`${shots.length} plans · modèle « ${model} » · ${imageEntries.length} image(s)`);
 console.log(`Coût estimé : ~${(shots.length * 6.5).toFixed(0)} crédits`);
 console.log("═".repeat(70));
 shots.forEach((s, i) => {
-  const idx = s.sourceImageIndex < imageUrls.length ? s.sourceImageIndex : 0;
+  const idx = s.sourceImageIndex < imageEntries.length ? s.sourceImageIndex : 0;
   console.log(`  Plan ${i + 1} — ${s.durationSeconds}s · image #${idx} · ${s.description.slice(0, 45)}…`);
 });
 console.log();
 
 async function main() {
+  // Les fichiers locaux sont téléversés ; les URL sont gardées telles quelles.
+  const imageUrls = await resolveImageUrls(imageEntries, (file) =>
+    console.log(`[${elapsed()}] ⬆ téléversement de ${path.basename(file)}…`),
+  );
+
   const result = await generateVideo({
     visualSignature,
     model,
