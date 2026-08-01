@@ -157,7 +157,10 @@ export async function waitForCompletion(
   statusUrl: string,
   {
     pollMs = 8_000,
-    timeoutMs = 15 * 60_000,
+    // Genereux : au-dela d'un certain nombre de generations simultanees,
+    // Higgsfield met les demandes en file d'attente. Un plafond trop bas
+    // abandonnerait une generation deja payee, juste parce qu'elle attendait.
+    timeoutMs = 30 * 60_000,
     onPoll,
   }: {
     pollMs?: number;

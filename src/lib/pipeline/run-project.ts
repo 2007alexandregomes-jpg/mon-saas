@@ -99,6 +99,8 @@ export async function runProject(projectId: string, accessToken: string) {
     }
 
     const analysis = await analyzeCompetitorVideo({
+      onEvent: (event) =>
+        console.log(`[projet ${projectId}] ${event.step} — ${event.status}`),
       url: project.competitor_video_url,
       product: {
         name: project.product_name,
@@ -136,6 +138,15 @@ export async function runProject(projectId: string, accessToken: string) {
     }
 
     const generated = await generateVideo({
+      onEvent: (event) => {
+        if (event.type === "plan échoué") {
+          console.error(
+            `[projet ${projectId}] plan ${event.index + 1} échoué : ${event.message}`,
+          );
+        } else if (event.type !== "plan") {
+          console.log(`[projet ${projectId}] ${event.type}`);
+        }
+      },
       visualSignature: analysis.analysis.visualSignature,
       targetFormat,
       shots: analysis.analysis.shots.map((shot) => ({
@@ -171,11 +182,21 @@ export async function runProject(projectId: string, accessToken: string) {
       return { ...shot, videoUrl: done?.videoUrl ?? null, requestId: done?.requestId ?? null };
     });
 
+    // Un plan raté ne fait pas échouer la publicité — mais l'utilisateur doit
+    // le savoir : sa vidéo est plus courte que prévu.
+    const partial =
+      generated.failed.length > 0
+        ? `${generated.failed.length} plan(s) sur ${analysis.analysis.shots.length} n'ont pas pu être générés : ${generated.failed
+            .map((f) => `plan ${f.index + 1} (${f.message})`)
+            .join(" · ")}`
+        : null;
+
     await update({
       status: "completed",
       generated_video_url: publicUrl.publicUrl,
       shots: shotsWithClips,
       generation_credits: Math.round(generated.shots.length * 6.5),
+      error_message: partial,
     });
 
     await generated.cleanup();

@@ -41,6 +41,8 @@ export type GenerationResult = {
   outputPath: string;
   durationSeconds: number;
   shots: { index: number; requestId: string; videoUrl: string }[];
+  /** Les plans qui n'ont pas abouti, avec leur cause. */
+  failed: { index: number; message: string }[];
   /** Nettoie les clips intermédiaires. À appeler une fois la vidéo copiée. */
   cleanup: () => Promise<void>;
 };
@@ -126,15 +128,29 @@ export async function generateVideo({
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
+          // Tracé côté serveur : sans ça, un plan qui échoue disparaît
+          // silencieusement et on ne peut plus rien diagnostiquer.
+          console.error(`[plan ${index + 1}] échec : ${message}`);
           onEvent?.({ type: "plan échoué", index, message });
-          return null;
+          return { index, error: message } as const;
         }
       },
     );
 
-    const ok = generated.filter((g) => g !== null);
+    const ok = generated.filter((g) => g !== null && !("error" in g)) as {
+      index: number;
+      filePath: string;
+      requestId: string;
+      videoUrl: string;
+    }[];
+    const failed = generated
+      .filter((g) => g !== null && "error" in g)
+      .map((g) => ({ index: g!.index, message: (g as { error: string }).error }));
+
     if (ok.length === 0) {
-      throw new Error("Tous les plans ont échoué — aucune vidéo à assembler.");
+      throw new Error(
+        `Tous les plans ont échoué. Première cause : ${failed[0]?.message ?? "inconnue"}`,
+      );
     }
 
     onEvent?.({ type: "assemblage" });
@@ -162,6 +178,7 @@ export async function generateVideo({
         requestId: g.requestId,
         videoUrl: g.videoUrl,
       })),
+      failed,
       cleanup: () => fs.rm(workDir, { recursive: true, force: true }),
     };
   } catch (error) {

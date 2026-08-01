@@ -84,26 +84,42 @@ export async function assembleVideo(
     throw new Error("Aucun clip à assembler.");
   }
 
-  // Une durée demandée plus longue que le clip produirait une image figée en
-  // fin de plan : on plafonne à ce qui existe réellement.
+  /** En dessous, un plan n'a pas le temps d'être lu par le spectateur. */
+  const MIN_SHOT_SECONDS = 1;
+
   const segments = await Promise.all(
     clips.map(async (clip) => {
       const available = await probeDuration(clip.filePath);
       const { width, height } = await probeVideoStream(clip.filePath);
-      const wanted = clip.durationSeconds ?? available;
+
+      // Le modèle peut renvoyer une durée absurde : les sorties structurées
+      // garantissent le TYPE (un entier) mais pas la PLAGE. Une durée de 0
+      // produirait un segment vide qui ferait échouer tout le montage — après
+      // que les clips ont été payés. On se rabat alors sur le clip entier.
+      const requested = clip.durationSeconds;
+      const usable =
+        typeof requested === "number" &&
+        Number.isFinite(requested) &&
+        requested >= MIN_SHOT_SECONDS
+          ? requested
+          : available;
+
       return {
         filePath: clip.filePath,
-        duration: Math.min(wanted, available),
+        // Une durée plus longue que le clip figerait la dernière image.
+        duration: Math.min(usable, available),
         width,
         height,
       };
     }),
   );
 
-  const empty = segments.filter((s) => s.duration <= 0 || s.width === 0);
-  if (empty.length > 0) {
+  const unreadable = segments.filter((s) => s.duration <= 0 || s.width === 0);
+  if (unreadable.length > 0) {
     throw new Error(
-      `Clip(s) illisible(s) ou vide(s) : ${empty.map((s) => path.basename(s.filePath)).join(", ")}`,
+      `Clip(s) illisible(s) : ${unreadable
+        .map((s) => path.basename(s.filePath))
+        .join(", ")}. Le fichier est vide ou corrompu.`,
     );
   }
 
