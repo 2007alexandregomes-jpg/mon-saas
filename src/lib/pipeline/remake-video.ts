@@ -40,6 +40,10 @@ export type RemakeEvent =
       treatment: ShotTreatment;
       content: string;
       reason: string;
+      /** Le texte incrusté relevé dans ce plan, à effacer. */
+      overlaidText: string;
+      /** La consigne rédigée pour le modèle d'édition. */
+      editPrompt: string;
     }
   | { type: "plans lancés"; edits: number; locaux: number; coutEstime: number }
   | { type: "plan terminé"; index: number; treatment: ShotTreatment }
@@ -180,6 +184,8 @@ export async function remakeVideo({
         treatment: p.treatment,
         content: p.content,
         reason: p.reason,
+        overlaidText: p.overlaidText,
+        editPrompt: p.editPrompt,
       });
     }
 

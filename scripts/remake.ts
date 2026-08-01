@@ -138,13 +138,21 @@ async function main() {
         case "analyse":
           console.log(`[${elapsed()}] ⏳ Claude examine chaque plan…`);
           break;
-        case "plan prévu":
-          console.log(
-            `           plan ${event.index} · ${ETIQUETTES[event.treatment]}\n` +
-              `             ${event.content}\n` +
-              `             → ${event.reason}`,
-          );
+        case "plan prévu": {
+          const lignes = [
+            `           plan ${event.index} · ${ETIQUETTES[event.treatment]}`,
+            `             ${event.content}`,
+            `             → ${event.reason}`,
+          ];
+          if (event.overlaidText) {
+            lignes.push(`             ✂️  texte à effacer : « ${event.overlaidText} »`);
+          }
+          if (dryRun && event.editPrompt) {
+            lignes.push(`             consigne : ${event.editPrompt}`);
+          }
+          console.log(lignes.join("\n"));
           break;
+        }
         case "plans lancés":
           console.log(
             `\n[${elapsed()}] 🚀 ${event.edits} édition(s) payante(s) + ${event.locaux} plan(s) local(aux)` +
