@@ -54,8 +54,14 @@ export function run(
         return;
       }
       if (code !== 0) {
+        // Les dernières lignes de stderr contiennent la vraie cause. Sans
+        // elles, on ne voit qu'un code de sortie qui n'apprend rien.
+        const tail = stderr.trim().split("\n").slice(-6).join("\n");
         reject(
-          new ProcessError(`${binary} a échoué (code ${code})`, stderr.trim()),
+          new ProcessError(
+            `${binary.split("/").pop()} a échoué (code ${code})\n${tail}`,
+            stderr.trim(),
+          ),
         );
         return;
       }

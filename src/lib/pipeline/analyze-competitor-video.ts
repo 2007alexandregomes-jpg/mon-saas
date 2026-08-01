@@ -5,6 +5,7 @@ import { transcribeAudio } from "@/lib/ai/transcribe";
 import {
   analyzeVideo,
   type AnalysisUsage,
+  type ProductImage,
   type VideoAnalysis,
 } from "@/lib/ai/analyze-video";
 
@@ -73,7 +74,7 @@ export async function analyzeCompetitorVideo({
 }: {
   url: string;
   /** `images` : les photos du produit en base64, vues par Claude. */
-  product: { name: string; description: string | null; images?: string[] };
+  product: { name: string; description: string | null; images?: ProductImage[] };
   /** `forceVoiceover` : le client veut une voix off même si la référence est muette. */
   options?: { forceVoiceover?: boolean };
   onEvent?: (event: PipelineEvent) => void;

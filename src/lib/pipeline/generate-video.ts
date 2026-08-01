@@ -161,7 +161,16 @@ export async function generateVideo({
       cleanup: () => fs.rm(workDir, { recursive: true, force: true }),
     };
   } catch (error) {
-    await fs.rm(workDir, { recursive: true, force: true });
-    throw error;
+    // ⚠️ On ne supprime SURTOUT PAS le dossier ici.
+    //
+    // Les clips qu'il contient ont coûté des crédits. Si l'assemblage échoue,
+    // les effacer obligerait à tout regénérer et à repayer. On laisse donc les
+    // fichiers en place et on dit où ils sont : l'assemblage se relance à
+    // volonté, gratuitement.
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${message}\n\nLes clips déjà générés sont conservés dans :\n  ${workDir}\n` +
+        `Ils n'ont pas besoin d'être regénérés — seul l'assemblage a échoué.`,
+    );
   }
 }

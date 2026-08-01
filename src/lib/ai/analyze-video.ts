@@ -183,6 +183,15 @@ Le client demande explicitement une voix off, même si la référence n'en a pas
 
 Reprends le rythme, le découpage et l'ambiance de la référence, et écris par-dessus un script parlé : une phrase courte par plan, calée sur les temps du montage. Reste sobre — la voix accompagne l'image, elle ne la commente pas.`;
 
+/** Formats d'image acceptés par l'API Claude. */
+export type ImageMediaType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/gif"
+  | "image/webp";
+
+export type ProductImage = { data: string; mediaType: ImageMediaType };
+
 export type AnalyzeInput = {
   /** Les images extraites, encodées en base64, dans l'ordre chronologique. */
   frames: string[];
@@ -198,11 +207,14 @@ export type AnalyzeInput = {
     name: string;
     description: string | null;
     /**
-     * Les photos du produit, en base64. Claude les voit : il adapte donc les
-     * plans à la géométrie réelle du produit, et désigne pour chaque plan la
-     * photo la plus proche du cadrage voulu.
+     * Les photos du produit. Claude les voit : il adapte donc les plans à la
+     * géométrie réelle du produit, et désigne pour chaque plan la photo la
+     * plus proche du cadrage voulu.
+     *
+     * `mediaType` doit correspondre au contenu réel — l'API rejette une image
+     * PNG annoncée comme JPEG.
      */
-    images?: string[];
+    images?: ProductImage[];
   };
   options?: {
     /**
@@ -281,14 +293,14 @@ export async function analyzeVideo({
           // Les photos du produit viennent APRÈS le contexte : Claude a ainsi
           // lu à quoi elles servent avant de les regarder.
           ...(product.images ?? [])
-            .map((data, index) => [
+            .map((image, index) => [
               { type: "text" as const, text: `Photo produit ${index} :` },
               {
                 type: "image" as const,
                 source: {
                   type: "base64" as const,
-                  media_type: "image/jpeg" as const,
-                  data,
+                  media_type: image.mediaType,
+                  data: image.data,
                 },
               },
             ])

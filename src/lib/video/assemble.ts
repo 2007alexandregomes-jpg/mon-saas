@@ -17,6 +17,30 @@ export type ClipToAssemble = {
   durationSeconds?: number;
 };
 
+/** Dimensions et cadence réelles d'un fichier vidéo. */
+export async function probeVideoStream(filePath: string): Promise<{
+  width: number;
+  height: number;
+}> {
+  const { stdout } = await run(
+    ffprobe.path,
+    [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "stream=width,height",
+      "-of",
+      "csv=p=0",
+      filePath,
+    ],
+    { timeoutMs: 30_000 },
+  );
+  const [width, height] = stdout.trim().split(",").map(Number);
+  return { width: width || 0, height: height || 0 };
+}
+
 /** Durée réelle d'un fichier vidéo, en secondes. */
 export async function probeDuration(filePath: string): Promise<number> {
   const { stdout } = await run(
@@ -59,20 +83,43 @@ export async function assembleVideo(
   const segments = await Promise.all(
     clips.map(async (clip) => {
       const available = await probeDuration(clip.filePath);
+      const { width, height } = await probeVideoStream(clip.filePath);
       const wanted = clip.durationSeconds ?? available;
-      return { filePath: clip.filePath, duration: Math.min(wanted, available) };
+      return {
+        filePath: clip.filePath,
+        duration: Math.min(wanted, available),
+        width,
+        height,
+      };
     }),
   );
 
+  const empty = segments.filter((s) => s.duration <= 0 || s.width === 0);
+  if (empty.length > 0) {
+    throw new Error(
+      `Clip(s) illisible(s) ou vide(s) : ${empty.map((s) => path.basename(s.filePath)).join(", ")}`,
+    );
+  }
+
+  // `concat` exige des entrées strictement identiques : mêmes dimensions,
+  // même cadence, mêmes pixels carrés. Higgsfield renvoie normalement du
+  // 720×1280, mais rien ne le garantit d'un modèle à l'autre — on aligne donc
+  // tout sur le format du premier clip plutôt que d'échouer à l'assemblage,
+  // après avoir déjà payé la génération.
+  const { width, height } = segments[0];
+
   const inputs = segments.flatMap((s) => ["-i", s.filePath]);
 
-  // Pour chaque entrée : couper à la bonne durée, puis remettre l'horodatage à
-  // zéro (`setpts`) — sans ça, le second clip commencerait à 5 s et ffmpeg
-  // insérerait un blanc.
+  // Pour chaque entrée : couper à la bonne durée, remettre l'horodatage à zéro
+  // (`setpts` — sans ça le second clip commencerait à 5 s et ffmpeg insérerait
+  // un blanc), puis normaliser format, cadence et rapport de pixels.
   const filters = segments
     .map(
       (s, i) =>
-        `[${i}:v]trim=start=0:end=${s.duration.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`,
+        `[${i}:v]trim=start=0:end=${s.duration.toFixed(3)},setpts=PTS-STARTPTS,` +
+        `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
+        `setsar=1,fps=30,format=yuv420p[v${i}]`,
     )
     .join(";");
 

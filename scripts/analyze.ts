@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { analyzeCompetitorVideo } from "../src/lib/pipeline/analyze-competitor-video";
+import type { ImageMediaType } from "../src/lib/ai/analyze-video";
 
 const args = process.argv.slice(2);
 const forceVoiceover = args.includes("--voix-off");
@@ -40,16 +41,34 @@ if (!url || !productName) {
   process.exit(1);
 }
 
+/**
+ * Devine le format d'après les premiers octets du fichier, pas d'après son
+ * extension : un fichier nommé `.jpg` mais contenant du PNG ferait rejeter la
+ * requête par l'API Claude.
+ */
+function detectMediaType(buffer: Buffer, file: string): ImageMediaType {
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    return "image/png";
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer.subarray(0, 3).toString() === "GIF") return "image/gif";
+  if (buffer.subarray(0, 4).toString() === "RIFF" && buffer.subarray(8, 12).toString() === "WEBP")
+    return "image/webp";
+  console.error(`❌ Format d'image non reconnu : ${file} (jpg, png, gif ou webp attendu)`);
+  process.exit(1);
+}
+
 const productImages = photoPaths.map((p) => {
   if (!fs.existsSync(p)) {
     console.error(`❌ Photo introuvable : ${p}`);
     process.exit(1);
   }
-  return fs.readFileSync(p).toString("base64");
+  const buffer = fs.readFileSync(p);
+  return { data: buffer.toString("base64"), mediaType: detectMediaType(buffer, p) };
 });
 
 if (productImages.length > 0) {
-  console.log(`📷 ${productImages.length} photo(s) produit chargée(s)\n`);
+  const formats = productImages.map((i) => i.mediaType.replace("image/", "")).join(", ");
+  console.log(`📷 ${productImages.length} photo(s) produit chargée(s) — ${formats}\n`);
 }
 
 const started = Date.now();
