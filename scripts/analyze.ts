@@ -11,10 +11,15 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
 import { analyzeCompetitorVideo } from "../src/lib/pipeline/analyze-competitor-video";
 
 const args = process.argv.slice(2);
 const forceVoiceover = args.includes("--voix-off");
+
+/** `--save fichier.json` : enregistre l'analyse pour la réutiliser sans la repayer. */
+const saveFlag = args.indexOf("--save");
+const savePath = saveFlag === -1 ? null : args[saveFlag + 1];
 
 /** `--photos a.jpg b.jpg` : les chemins des photos produit, séparés par des espaces. */
 const photosFlag = args.indexOf("--photos");
@@ -23,14 +28,14 @@ const photoPaths =
     ? []
     : args.slice(photosFlag + 1).filter((a) => !a.startsWith("--"));
 
-const positional = (
-  photosFlag === -1 ? args : args.slice(0, photosFlag)
-).filter((a) => !a.startsWith("--"));
+const positional = (photosFlag === -1 ? args : args.slice(0, photosFlag))
+  .filter((a) => !a.startsWith("--"))
+  .filter((a) => a !== savePath);
 const [url, productName, productDescription] = positional;
 
 if (!url || !productName) {
   console.error(
-    'Usage : npm run analyze -- "<lien vidéo>" "<nom du produit>" ["description"] [--voix-off] [--photos photo1.jpg photo2.jpg]',
+    'Usage : npm run analyze -- "<lien vidéo>" "<nom du produit>" ["description"] [--voix-off] [--photos a.jpg b.jpg] [--save analyse.json]',
   );
   process.exit(1);
 }
@@ -156,6 +161,12 @@ async function main() {
 
   console.log(`\n${rule}\nNOTES`);
   console.log(`  ${analysis.notes}`);
+
+  if (savePath) {
+    fs.mkdirSync(path.dirname(path.resolve(savePath)), { recursive: true });
+    fs.writeFileSync(savePath, JSON.stringify(result, null, 2));
+    console.log(`\n💾 Analyse enregistrée dans ${savePath}`);
+  }
 
   console.log(`\n${"═".repeat(70)}`);
   console.log(
