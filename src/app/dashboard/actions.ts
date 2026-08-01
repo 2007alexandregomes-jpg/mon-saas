@@ -106,3 +106,34 @@ export async function createProject(
   revalidatePath("/dashboard");
   redirect(`/dashboard/${data.id}`);
 }
+
+/**
+ * Remet un projet en attente pour le relancer.
+ *
+ * Ne touche qu'aux projets en échec : relancer un projet en cours ferait
+ * tourner deux traitements et facturerait deux fois. Le RLS garantit qu'on ne
+ * peut relancer que les siens.
+ */
+export async function retryProject(projectId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Ta session a expiré. Reconnecte-toi." };
+
+  const { data, error } = await supabase
+    .from("projects")
+    .update({ status: "pending", error_message: null })
+    .eq("id", projectId)
+    .in("status", ["failed", "nsfw", "canceled"])
+    .select("id");
+
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) {
+    return { error: "Ce projet n'est pas dans un état relançable." };
+  }
+
+  revalidatePath(`/dashboard/${projectId}`);
+  return {};
+}

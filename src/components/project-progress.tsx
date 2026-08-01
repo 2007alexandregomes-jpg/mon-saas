@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { retryProject } from "@/app/dashboard/actions";
 import { STATUS_LABELS, type Project, type ProjectStatus } from "@/lib/types";
 
 /**
@@ -48,6 +49,8 @@ export function ProjectProgress({ project }: { project: Project }) {
   const [status, setStatus] = useState<ProjectStatus>(project.status);
   const [startedAt] = useState(() => Date.now());
   const [elapsed, setElapsed] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const triggered = useRef(false);
 
   // 1. Démarrer le traitement si personne ne l'a fait.
@@ -107,6 +110,41 @@ export function ProjectProgress({ project }: { project: Project }) {
         </p>
         <p className="mt-1.5 text-sm text-red-700 dark:text-red-400">
           {project.error_message ?? "Aucun détail disponible."}
+        </p>
+
+        {retryError && (
+          <p className="mt-3 text-sm text-red-700 dark:text-red-400">
+            {retryError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          disabled={retrying}
+          onClick={async () => {
+            setRetrying(true);
+            setRetryError(null);
+            const result = await retryProject(project.id);
+            if (result.error) {
+              setRetryError(result.error);
+              setRetrying(false);
+              return;
+            }
+            // Le projet est de nouveau « en attente » : on relance le
+            // traitement et on repasse l'affichage en mode avancement.
+            await fetch(`/api/projects/${project.id}/process`, { method: "POST" });
+            setStatus("analyzing");
+            setRetrying(false);
+            router.refresh();
+          }}
+          className="mt-4 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+        >
+          {retrying ? "Relancement…" : "Relancer"}
+        </button>
+
+        <p className="mt-3 text-xs text-red-700/70 dark:text-red-400/70">
+          Rien n&apos;est resaisi : le lien, le produit et les photos sont
+          conservés.
         </p>
       </div>
     );
