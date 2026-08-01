@@ -1,13 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 /** Ce que l'action renvoie au formulaire pour qu'il affiche un message. */
 export type CreateProjectState = {
   error?: string;
-  /** Change à chaque succès : sert au formulaire à savoir qu'il doit se vider. */
-  successId?: string;
 };
 
 /** Accepte uniquement une vraie adresse http(s). */
@@ -21,11 +20,11 @@ function isHttpUrl(value: string) {
 }
 
 /**
- * Crée un projet pour l'utilisateur connecté.
+ * Crée un projet, puis redirige vers sa page.
  *
- * Tout se passe sur le serveur : le navigateur ne choisit pas le `user_id`,
- * on le lit depuis la session. Et même si quelqu'un trafiquait la requête,
- * le RLS de Postgres refuserait d'écrire une ligne au nom d'un autre.
+ * Le traitement lui-même (analyse + génération, ~8 minutes) n'est PAS lancé
+ * ici : une Server Action doit répondre vite. C'est la page du projet qui le
+ * déclenche, et il se poursuit côté serveur même si l'onglet est fermé.
  */
 export async function createProject(
   _prevState: CreateProjectState,
@@ -47,7 +46,15 @@ export async function createProject(
   const productDescription = String(
     formData.get("product_description") ?? "",
   ).trim();
-  const productImageUrl = String(formData.get("product_image_url") ?? "").trim();
+  const forceVoiceover = formData.get("force_voiceover") === "on";
+
+  // Les photos sont déjà dans le bucket : le formulaire ne transmet que leurs URL.
+  let imageUrls: string[] = [];
+  try {
+    imageUrls = JSON.parse(String(formData.get("product_image_urls") ?? "[]"));
+  } catch {
+    return { error: "Les photos n'ont pas pu être lues. Recharge la page." };
+  }
 
   // --- Validations (le `required` du HTML ne suffit pas : il se contourne) ---
   if (!competitorVideoUrl) {
@@ -65,29 +72,37 @@ export async function createProject(
   if (productName.length > 200) {
     return { error: "Le nom du produit est trop long (200 caractères max)." };
   }
-  if (productImageUrl && !isHttpUrl(productImageUrl)) {
+  if (imageUrls.length === 0) {
     return {
       error:
-        "Le lien de l'image doit commencer par http:// ou https://, ou rester vide.",
+        "Ajoute au moins une photo de ton produit — c'est elle que la vidéo animera.",
     };
   }
+  if (!imageUrls.every(isHttpUrl)) {
+    return { error: "Une des photos a une adresse invalide. Retire-la et réessaie." };
+  }
 
-  const { error } = await supabase.from("projects").insert({
-    user_id: user.id,
-    competitor_video_url: competitorVideoUrl,
-    product_name: productName,
-    // Colonnes optionnelles : on écrit null plutôt qu'une chaîne vide.
-    product_description: productDescription || null,
-    product_image_url: productImageUrl || null,
-  });
+  const { data, error } = await supabase
+    .from("projects")
+    .insert({
+      user_id: user.id,
+      competitor_video_url: competitorVideoUrl,
+      product_name: productName,
+      product_description: productDescription || null,
+      product_image_urls: imageUrls,
+      status: "pending",
+      // Stocké dans les notes le temps qu'une colonne dédiée existe : la voix
+      // off n'est pas encore implémentée, mais le choix de l'utilisateur ne
+      // doit pas être perdu.
+      notes: forceVoiceover ? "voix-off-demandée" : null,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     return { error: `Enregistrement impossible : ${error.message}` };
   }
 
-  // Invalide le cache de /dashboard pour que la liste se recharge avec le
-  // nouveau projet, sans recharger la page à la main.
   revalidatePath("/dashboard");
-
-  return { successId: crypto.randomUUID() };
+  redirect(`/dashboard/${data.id}`);
 }

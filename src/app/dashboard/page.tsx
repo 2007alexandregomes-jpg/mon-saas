@@ -51,11 +51,11 @@ export default async function DashboardPage() {
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section>
-          <h2 className="text-lg font-medium">Nouveau projet</h2>
+          <h2 className="text-lg font-medium">Nouvelle publicité</h2>
           <p className="mt-1 mb-6 text-sm text-neutral-500">
-            Colle la pub à imiter et décris ton produit.
+            Colle la pub à imiter, décris ton produit, ajoute tes photos.
           </p>
-          <NewProjectForm />
+          <NewProjectForm userId={user.id} />
         </section>
 
         <section>

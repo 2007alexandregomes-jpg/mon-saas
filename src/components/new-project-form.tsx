@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createProject, type CreateProjectState } from "@/app/dashboard/actions";
+import { PhotoUploader } from "@/components/photo-uploader";
+import type { UploadedImage } from "@/lib/storage/product-images";
 
 const inputClass =
   "w-full rounded-lg border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50";
@@ -12,33 +14,28 @@ const inputClass =
  * `useFormStatus` ne marche que dans un composant ENFANT du <form>, d'où
  * ce petit composant séparé.
  */
-function SubmitButton() {
+function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
-      className="rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+      disabled={pending || disabled}
+      className="w-full rounded-lg bg-neutral-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
     >
-      {pending ? "Création…" : "Créer le projet"}
+      {pending ? "Création…" : "Créer ma publicité"}
     </button>
   );
 }
 
-export function NewProjectForm() {
-  const formRef = useRef<HTMLFormElement>(null);
+export function NewProjectForm({ userId }: { userId: string }) {
+  const [images, setImages] = useState<UploadedImage[]>([]);
   const [state, formAction] = useActionState<CreateProjectState, FormData>(
     createProject,
     {},
   );
 
-  // Après un succès, on vide les champs pour enchaîner sur un autre projet.
-  useEffect(() => {
-    if (state.successId) formRef.current?.reset();
-  }, [state.successId]);
-
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <div>
         <label
           htmlFor="competitor_video_url"
@@ -55,7 +52,8 @@ export function NewProjectForm() {
           className={inputClass}
         />
         <p className="mt-1 text-xs text-neutral-500">
-          La pub dont tu veux reprendre le style et les mouvements.
+          La pub dont tu veux reprendre le style, le rythme et le découpage. Ta
+          vidéo aura exactement le même format.
         </p>
       </div>
 
@@ -72,7 +70,7 @@ export function NewProjectForm() {
           type="text"
           required
           maxLength={200}
-          placeholder="Crème hydratante bio"
+          placeholder="JBL Tune 770NC"
           className={inputClass}
         />
       </div>
@@ -88,30 +86,38 @@ export function NewProjectForm() {
           id="product_description"
           name="product_description"
           rows={3}
-          placeholder="Matière, bénéfices, ambiance souhaitée…"
+          placeholder="Casque circum-auriculaire noir mat, réduction de bruit active, 70 h d'autonomie, pour les 18-35 ans qui prennent les transports"
           className={`${inputClass} resize-y`}
         />
-      </div>
-
-      <div>
-        <label
-          htmlFor="product_image_url"
-          className="mb-1.5 block text-sm font-medium"
-        >
-          Image du produit <span className="text-neutral-400">(URL)</span>
-        </label>
-        <input
-          id="product_image_url"
-          name="product_image_url"
-          type="url"
-          placeholder="https://mon-site.com/produit.jpg"
-          className={inputClass}
-        />
         <p className="mt-1 text-xs text-neutral-500">
-          Le lien direct vers une image déjà en ligne — depuis ta fiche produit,
-          par exemple.
+          Matière, format, bénéfice concret, cible. Plus c&apos;est précis, meilleur
+          sera le script.
         </p>
       </div>
+
+      <PhotoUploader userId={userId} images={images} onChange={setImages} />
+
+      {/* Les URL des photos voyagent en JSON : elles sont déjà dans le bucket. */}
+      <input
+        type="hidden"
+        name="product_image_urls"
+        value={JSON.stringify(images.map((i) => i.url))}
+      />
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+        <input
+          type="checkbox"
+          name="force_voiceover"
+          className="mt-0.5 h-4 w-4 accent-neutral-900 dark:accent-white"
+        />
+        <span>
+          Ajouter une voix off
+          <span className="mt-0.5 block text-xs text-neutral-500">
+            Par défaut, ta pub reproduit la forme de la référence : muette si la
+            référence est muette.
+          </span>
+        </span>
+      </label>
 
       {state.error && (
         <p className="rounded-lg border border-red-600/30 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
@@ -119,13 +125,11 @@ export function NewProjectForm() {
         </p>
       )}
 
-      {state.successId && !state.error && (
-        <p className="rounded-lg border border-green-600/30 bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950/30 dark:text-green-400">
-          Projet créé ✅
-        </p>
-      )}
+      <SubmitButton disabled={images.length === 0} />
 
-      <SubmitButton />
+      <p className="text-center text-xs text-neutral-500">
+        Comptez environ 8 minutes. Tu peux fermer la page, le travail continue.
+      </p>
     </form>
   );
 }

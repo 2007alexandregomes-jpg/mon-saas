@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { STATUS_LABELS, type Project, type ProjectStatus } from "@/lib/types";
 
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
@@ -36,10 +37,11 @@ export function ProjectList({ projects }: { projects: Project[] }) {
   return (
     <ul className="space-y-3">
       {projects.map((project) => (
-        <li
-          key={project.id}
-          className="rounded-xl border border-black/10 p-4 dark:border-white/15"
-        >
+        <li key={project.id}>
+          <Link
+            href={`/dashboard/${project.id}`}
+            className="block rounded-xl border border-black/10 p-4 transition hover:border-black/25 hover:bg-black/[0.02] dark:border-white/15 dark:hover:border-white/30 dark:hover:bg-white/[0.03]"
+          >
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-medium">{project.product_name}</h3>
             <span
@@ -56,17 +58,7 @@ export function ProjectList({ projects }: { projects: Project[] }) {
           )}
 
           <p className="mt-3 truncate text-xs text-neutral-400">
-            Réf.{" "}
-            {/* `rel` protège l'onglet d'origine : sans lui, le site ouvert
-                pourrait manipuler ta page via window.opener. */}
-            <a
-              href={project.competitor_video_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-neutral-600"
-            >
-              {project.competitor_video_url}
-            </a>
+            Réf. {project.competitor_video_url}
           </p>
 
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -78,16 +70,12 @@ export function ProjectList({ projects }: { projects: Project[] }) {
             </time>
 
             {project.generated_video_url && (
-              <a
-                href={project.generated_video_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium underline underline-offset-2"
-              >
-                Voir la vidéo
-              </a>
+              <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                Vidéo prête
+              </span>
             )}
           </div>
+          </Link>
         </li>
       ))}
     </ul>
