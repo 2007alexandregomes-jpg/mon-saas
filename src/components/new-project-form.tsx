@@ -22,7 +22,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={pending || disabled}
       className="w-full rounded-lg bg-neutral-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
     >
-      {pending ? "Création…" : "Créer ma publicité"}
+      {pending ? "Création…" : "Analyser cette publicité"}
     </button>
   );
 }
@@ -104,17 +104,36 @@ export function NewProjectForm({ userId }: { userId: string }) {
         value={JSON.stringify(images.map((i) => i.url))}
       />
 
+      <div>
+        <label htmlFor="brand_name" className="mb-1.5 block text-sm font-medium">
+          Nom de ta marque
+        </label>
+        <input
+          id="brand_name"
+          name="brand_name"
+          type="text"
+          maxLength={60}
+          placeholder="anouck aimé"
+          className={inputClass}
+        />
+        <p className="mt-1 text-xs text-neutral-500">
+          Remplace les cartons de marque du concurrent. Laissé vide, ces plans
+          seront simplement retirés.
+        </p>
+      </div>
+
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
         <input
           type="checkbox"
-          name="force_voiceover"
+          name="replace_people"
+          defaultChecked
           className="mt-0.5 h-4 w-4 accent-neutral-900 dark:accent-white"
         />
         <span>
-          Ajouter une voix off
+          Remplacer aussi les personnes filmées
           <span className="mt-0.5 block text-xs text-neutral-500">
-            Par défaut, ta pub reproduit la forme de la référence : muette si la
-            référence est muette.
+            Une autre personne portera ton produit, dans la même pose et le même
+            décor.
           </span>
         </span>
       </label>
@@ -128,7 +147,8 @@ export function NewProjectForm({ userId }: { userId: string }) {
       <SubmitButton disabled={images.length === 0} />
 
       <p className="text-center text-xs text-neutral-500">
-        Comptez environ 8 minutes. Tu peux fermer la page, le travail continue.
+        L&apos;analyse prend ~2 minutes et ne coûte presque rien. Tu verras le
+        plan et le devis <strong>avant</strong> de lancer la fabrication.
       </p>
     </form>
   );

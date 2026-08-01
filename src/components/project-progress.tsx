@@ -21,28 +21,47 @@ import { STATUS_LABELS, type Project, type ProjectStatus } from "@/lib/types";
 
 const POLL_MS = 3_000;
 
-const TERMINAL: ProjectStatus[] = ["completed", "failed", "nsfw", "canceled"];
+/** Statuts où plus rien ne tourne : inutile de continuer à interroger la base. */
+const TERMINAL: ProjectStatus[] = [
+  "completed",
+  "failed",
+  "nsfw",
+  "canceled",
+  // La validation attend une action humaine, pas la fin d'un traitement.
+  "awaiting_approval",
+];
 
 /** Les étapes visibles par l'utilisateur, dans l'ordre. */
 const STEPS: { status: ProjectStatus; label: string; detail: string }[] = [
   {
-    status: "analyzing",
-    label: "Analyse de la référence",
-    detail: "Téléchargement, transcription, découpage en plans",
+    status: "planning",
+    label: "Analyse de la publicite",
+    detail: "Telechargement, decoupage en plans, choix des traitements",
+  },
+  {
+    status: "awaiting_approval",
+    label: "Validation du plan",
+    detail: "Tu verifies et tu lances — rien n'est facture avant",
   },
   {
     status: "generating",
-    label: "Génération de la vidéo",
-    detail: "Tous les plans sont fabriqués en parallèle",
+    label: "Fabrication de la video",
+    detail: "Les plans sont produits en parallele, puis montes",
   },
   {
     status: "completed",
-    label: "Montage terminé",
-    detail: "Ta publicité est prête",
+    label: "Termine",
+    detail: "Ta publicite est prete",
   },
 ];
 
-const ORDER: ProjectStatus[] = ["pending", "analyzing", "generating", "completed"];
+const ORDER: ProjectStatus[] = [
+  "pending",
+  "planning",
+  "awaiting_approval",
+  "generating",
+  "completed",
+];
 
 export function ProjectProgress({ project }: { project: Project }) {
   const router = useRouter();
@@ -60,11 +79,9 @@ export function ProjectProgress({ project }: { project: Project }) {
     if (project.status !== "pending" || triggered.current) return;
     triggered.current = true;
 
-    fetch(`/api/projects/${project.id}/process`, { method: "POST" }).catch(
-      () => {
-        // Le prochain rafraîchissement de la page réessaiera.
-      },
-    );
+    fetch(`/api/projects/${project.id}/plan`, { method: "POST" }).catch(() => {
+      // Le prochain rafraichissement de la page reessaiera.
+    });
   }, [project.id, project.status]);
 
   // 2. Interroger la base jusqu'à un statut définitif.
@@ -100,7 +117,8 @@ export function ProjectProgress({ project }: { project: Project }) {
     return () => clearInterval(timer);
   }, [status, startedAt]);
 
-  if (status === "completed") return null;
+  // Pendant la validation, l’ecran de plan prend le relais.
+  if (status === "completed" || status === "awaiting_approval") return null;
 
   if (status === "failed" || status === "nsfw" || status === "canceled") {
     return (
@@ -134,8 +152,8 @@ export function ProjectProgress({ project }: { project: Project }) {
             }
             // Le projet est de nouveau « en attente » : on relance le
             // traitement et on repasse l'affichage en mode avancement.
-            await fetch(`/api/projects/${project.id}/process`, { method: "POST" });
-            setStatus("analyzing");
+            await fetch(`/api/projects/${project.id}/plan`, { method: "POST" });
+            setStatus("planning");
             setRetrying(false);
             router.refresh();
           }}

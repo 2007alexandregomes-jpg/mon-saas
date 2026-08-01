@@ -46,7 +46,8 @@ export async function createProject(
   const productDescription = String(
     formData.get("product_description") ?? "",
   ).trim();
-  const forceVoiceover = formData.get("force_voiceover") === "on";
+  const brandName = String(formData.get("brand_name") ?? "").trim();
+  const replacePeople = formData.get("replace_people") === "on";
 
   // Les photos sont déjà dans le bucket : le formulaire ne transmet que leurs URL.
   let imageUrls: string[] = [];
@@ -91,10 +92,8 @@ export async function createProject(
       product_description: productDescription || null,
       product_image_urls: imageUrls,
       status: "pending",
-      // Stocké dans les notes le temps qu'une colonne dédiée existe : la voix
-      // off n'est pas encore implémentée, mais le choix de l'utilisateur ne
-      // doit pas être perdu.
-      notes: forceVoiceover ? "voix-off-demandée" : null,
+      brand_name: brandName || null,
+      replace_people: replacePeople,
     })
     .select("id")
     .single();
@@ -124,7 +123,12 @@ export async function retryProject(projectId: string): Promise<{ error?: string 
 
   const { data, error } = await supabase
     .from("projects")
-    .update({ status: "pending", error_message: null })
+    .update({
+      status: "pending",
+      error_message: null,
+      shot_plan: null,
+      generated_video_url: null,
+    })
     .eq("id", projectId)
     .in("status", ["failed", "nsfw", "canceled"])
     .select("id");

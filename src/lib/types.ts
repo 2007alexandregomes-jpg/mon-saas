@@ -1,6 +1,8 @@
 /** Les statuts autorisés par la contrainte `check` de la table projects. */
 export type ProjectStatus =
   | "pending"
+  | "planning"
+  | "awaiting_approval"
   | "analyzing"
   | "generating"
   | "completed"
@@ -10,12 +12,57 @@ export type ProjectStatus =
 
 export const STATUS_LABELS: Record<ProjectStatus, string> = {
   pending: "En attente",
+  planning: "Analyse de la publicité",
+  awaiting_approval: "En attente de ta validation",
   analyzing: "Analyse de la référence",
-  generating: "Génération de la vidéo",
+  generating: "Fabrication de la vidéo",
   completed: "Terminé",
   failed: "Échec",
   nsfw: "Contenu refusé",
   canceled: "Annulé",
+};
+
+/** Le traitement retenu pour un plan. */
+export type ShotTreatment = "edit" | "still" | "card" | "drop";
+
+export const TREATMENT_LABELS: Record<ShotTreatment, string> = {
+  edit: "Édition vidéo",
+  still: "Zoom sur photo",
+  card: "Carton de marque",
+  drop: "Retirer du montage",
+};
+
+export const TREATMENT_HELP: Record<ShotTreatment, string> = {
+  edit: "Le produit est remplacé dans la scène d'origine. Seul traitement payant.",
+  still: "Un lent zoom sur ta photo. Gratuit, mais sans le décor de la vidéo.",
+  card: "Un carton avec ton nom de marque, sur fond uni. Gratuit.",
+  drop: "Ce plan disparaît de la vidéo finale.",
+};
+
+export type VideoFormat = { width: number; height: number };
+
+/** Un plan de la publicité d'origine, et ce qu'on prévoit d'en faire. */
+export type PlannedShot = {
+  index: number;
+  startSeconds: number;
+  durationSeconds: number;
+  /** L'extrait d'origine, déposé publiquement pour le modèle d'édition. */
+  clipUrl: string;
+  /** Une vignette, pour que le client voie de quel plan on parle. */
+  thumbUrl: string;
+  /** Ce que Claude a vu dans ce plan. */
+  content: string;
+  /** Pourquoi ce traitement a été proposé. */
+  reason: string;
+  /** Le texte du concurrent repéré dans ce plan. */
+  overlaidText: string;
+  treatment: ShotTreatment;
+  editPrompt: string;
+  sourceImageIndex: number;
+  cropHint: string;
+  /** Rempli après exécution. */
+  resultUrl: string | null;
+  error: string | null;
 };
 
 /** Un plan de la vidéo finale. Un plan = une génération Higgsfield. */
@@ -68,6 +115,16 @@ export type Project = {
   visual_signature: string | null;
   shots: Shot[] | null;
   notes: string | null;
+
+  // Ce que le client choisit au départ
+  brand_name: string | null;
+  replace_people: boolean;
+
+  // Le plan proposé, qu'il valide avant toute dépense
+  shot_plan: PlannedShot[] | null;
+  source_format: VideoFormat | null;
+  plan_cost_usd: number | null;
+  edit_cost_usd: number | null;
 
   // Résultat final
   generated_video_url: string | null;

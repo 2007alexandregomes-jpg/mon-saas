@@ -4,6 +4,9 @@ import { STATUS_LABELS, type Project, type ProjectStatus } from "@/lib/types";
 const STATUS_CLASSES: Record<ProjectStatus, string> = {
   pending:
     "bg-neutral-100 text-neutral-700 dark:bg-white/10 dark:text-neutral-300",
+  planning: "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
+  awaiting_approval:
+    "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
   analyzing: "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
   generating:
     "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",

@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ProjectProgress } from "@/components/project-progress";
-import { STATUS_LABELS, type Project } from "@/lib/types";
+import { PlanReview } from "@/components/plan-review";
+import { STATUS_LABELS, TREATMENT_LABELS, type Project } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -67,8 +68,6 @@ export default async function ProjectPage({
 
   if (!project) notFound();
 
-  const shots = project.shots ?? [];
-
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
       <Link
@@ -90,6 +89,14 @@ export default async function ProjectPage({
 
       <div className="space-y-6">
         <ProjectProgress project={project} />
+
+        {project.status === "awaiting_approval" && project.shot_plan && (
+          <PlanReview
+            projectId={project.id}
+            initialShots={project.shot_plan}
+            brandName={project.brand_name}
+          />
+        )}
 
         {project.generated_video_url && (
           <Section title="Ta publicité">
@@ -114,38 +121,31 @@ export default async function ProjectPage({
           </Section>
         )}
 
-        {project.adapted_script && (
-          <Section title="Script adapté à ton produit">
-            <Field label="Accroche" value={project.adapted_script.hook} />
-            <Field label="Corps" value={project.adapted_script.body} />
-            <Field label="Conclusion" value={project.adapted_script.cta} />
-          </Section>
-        )}
-
-        {shots.length > 0 && (
-          <Section title={`Découpage — ${shots.length} plans`}>
+        {project.status === "completed" && project.shot_plan && (
+          <Section title={`Découpage — ${project.shot_plan.length} plans`}>
             <ol className="space-y-4">
-              {shots.map((shot, index) => (
+              {project.shot_plan.map((shot) => (
                 <li
-                  key={index}
-                  className="border-l-2 border-black/10 pl-4 dark:border-white/15"
+                  key={shot.index}
+                  className={`border-l-2 pl-4 ${
+                    shot.treatment === "drop"
+                      ? "border-black/5 opacity-50 dark:border-white/5"
+                      : "border-black/10 dark:border-white/15"
+                  }`}
                 >
                   <p className="text-xs font-medium text-neutral-500">
-                    Plan {index + 1} · {shot.durationSeconds} s
+                    Plan {shot.index + 1} · {shot.durationSeconds.toFixed(1)} s ·{" "}
+                    {TREATMENT_LABELS[shot.treatment]}
                   </p>
-                  <p className="mt-0.5 text-sm">{shot.description}</p>
+                  <p className="mt-0.5 text-sm">{shot.content}</p>
+                  {shot.error && (
+                    <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">
+                      {shot.error}
+                    </p>
+                  )}
                 </li>
               ))}
             </ol>
-          </Section>
-        )}
-
-        {project.style && (
-          <Section title="Style repris de la référence">
-            <Field label="Caméra" value={project.style.camera} />
-            <Field label="Lumière" value={project.style.lighting} />
-            <Field label="Rythme" value={project.style.pacing} />
-            <Field label="Décor" value={project.style.setting} />
           </Section>
         )}
 
@@ -167,11 +167,11 @@ export default async function ProjectPage({
               {project.competitor_video_url}
             </a>
           </div>
-          {project.analysis_cost_usd !== null && (
+          {(project.plan_cost_usd !== null || project.edit_cost_usd !== null) && (
             <p className="mt-4 border-t border-black/10 pt-3 text-xs text-neutral-500 dark:border-white/10">
-              Coût : {project.analysis_cost_usd.toFixed(2)} $ d&apos;analyse
-              {project.generation_credits
-                ? ` · ${project.generation_credits} crédits de génération`
+              Coût : {(project.plan_cost_usd ?? 0).toFixed(2)} $ d&apos;analyse
+              {project.status === "completed" && project.edit_cost_usd
+                ? ` + ${project.edit_cost_usd.toFixed(2)} $ de fabrication`
                 : ""}
             </p>
           )}
