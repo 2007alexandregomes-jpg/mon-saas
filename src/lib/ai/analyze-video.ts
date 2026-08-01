@@ -136,6 +136,15 @@ Produis entre 3 et 6 plans, dont les durées additionnées correspondent à la d
 
 Écris \`referenceImage\`, \`motionPrompt\` et \`visualSignature\` en anglais. \`description\` en français.
 
+PIÈGES DE RÉDACTION DES PROMPTS ANGLAIS — à respecter strictement
+
+Le modèle vidéo prend les mots au pied de la lettre et rend ce qu'il lit.
+
+- N'utilise JAMAIS un nom de couleur qui évoque un lieu ou un objet réel : "forest green" fait apparaître une forêt, "sky blue" un ciel, "ocean blue" la mer, "emerald" des pierres. Écris la couleur en termes neutres : "dark desaturated green", "deep teal", "muted blue-grey".
+- Ne nomme aucun élément de décor que tu ne veux pas voir apparaître, même par comparaison ou métaphore ("like a stage", "as if underwater").
+- Décris le fond par sa valeur et sa texture, jamais par un lieu : "seamless dark gradient background", "pure black void", "soft grey studio backdrop".
+- Termine \`visualSignature\` par les exclusions utiles : "no environment, no scenery, no props, no text, no people".
+
 Écris en français, dans le ton de la vidéo de référence. Sois concret : "travelling avant lent sur le produit posé sur un plan de travail en marbre, lumière rasante dorée" plutôt que "belle esthétique".
 
 Si les images ne permettent pas de conclure sur un point, dis-le franchement plutôt que d'inventer.`;
