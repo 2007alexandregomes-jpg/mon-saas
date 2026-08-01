@@ -28,6 +28,9 @@ export type VideoMeta = {
   title: string | null;
   durationSeconds: number | null;
   uploader: string | null;
+  /** Dimensions de la référence : la pub générée doit les reproduire. */
+  width: number | null;
+  height: number | null;
 };
 
 export type TranscriptSource = "sous-titres" | "transcription" | "aucun";
@@ -86,6 +89,8 @@ export async function analyzeCompetitorVideo({
     title: video.title,
     durationSeconds: video.durationSeconds,
     uploader: video.uploader,
+    width: video.width,
+    height: video.height,
   };
   onEvent?.({ step: "téléchargement", status: "done", video: videoMeta });
 

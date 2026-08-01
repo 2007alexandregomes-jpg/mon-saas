@@ -70,7 +70,13 @@ export async function probeDuration(filePath: string): Promise<number> {
 export async function assembleVideo(
   clips: ClipToAssemble[],
   outputPath: string,
-): Promise<{ outputPath: string; durationSeconds: number }> {
+  /**
+   * Format de la vidéo finale. Omis, on reprend celui du premier clip — mais
+   * l'appelant devrait toujours l'imposer : la publicité doit reproduire les
+   * dimensions de la vidéo de référence.
+   */
+  targetFormat?: { width: number; height: number },
+): Promise<{ outputPath: string; durationSeconds: number; width: number; height: number }> {
   if (!ffmpegPath) {
     throw new Error("ffmpeg est introuvable (paquet ffmpeg-static absent ?).");
   }
@@ -102,11 +108,15 @@ export async function assembleVideo(
   }
 
   // `concat` exige des entrées strictement identiques : mêmes dimensions,
-  // même cadence, mêmes pixels carrés. Higgsfield renvoie normalement du
-  // 720×1280, mais rien ne le garantit d'un modèle à l'autre — on aligne donc
-  // tout sur le format du premier clip plutôt que d'échouer à l'assemblage,
+  // même cadence, mêmes pixels carrés. Higgsfield calque le format de sortie
+  // sur celui de l'image d'entrée, donc rien ne garantit l'uniformité — on
+  // aligne tout sur le format cible plutôt que d'échouer à l'assemblage,
   // après avoir déjà payé la génération.
-  const { width, height } = segments[0];
+  //
+  // Les dimensions doivent être paires : libx264 en yuv420p les exige.
+  const even = (n: number) => (n % 2 === 0 ? n : n - 1);
+  const width = even(targetFormat?.width ?? segments[0].width);
+  const height = even(targetFormat?.height ?? segments[0].height);
 
   const inputs = segments.flatMap((s) => ["-i", s.filePath]);
 
@@ -155,6 +165,8 @@ export async function assembleVideo(
   return {
     outputPath,
     durationSeconds: segments.reduce((total, s) => total + s.duration, 0),
+    width,
+    height,
   };
 }
 

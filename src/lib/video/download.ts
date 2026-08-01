@@ -17,6 +17,15 @@ export type VideoInfo = {
   durationSeconds: number | null;
   uploader: string | null;
   /**
+   * Dimensions ORIGINALES de la vidéo de référence.
+   *
+   * C'est le format que la publicité générée devra reproduire. On les lit dans
+   * les métadonnées et non sur le fichier téléchargé : on télécharge une copie
+   * allégée, dont les dimensions ne sont pas celles de l'original.
+   */
+  width: number | null;
+  height: number | null;
+  /**
    * Le texte parlé, si la plateforme fournit des sous-titres (automatiques ou
    * non). `null` quand il n'y en a pas — il faudra alors transcrire l'audio.
    */
@@ -107,6 +116,8 @@ export async function probeVideo(url: string) {
     description?: string;
     duration?: number;
     uploader?: string;
+    width?: number;
+    height?: number;
   };
 
   const durationSeconds = meta.duration ?? null;
@@ -121,6 +132,8 @@ export async function probeVideo(url: string) {
     description: meta.description ?? null,
     durationSeconds,
     uploader: meta.uploader ?? null,
+    width: meta.width ?? null,
+    height: meta.height ?? null,
   };
 }
 

@@ -24,6 +24,7 @@ import os from "node:os";
 import type { ShotModel } from "../src/lib/higgsfield/generate-shot";
 
 type SavedAnalysis = {
+  video?: { width: number | null; height: number | null; title: string | null };
   analysis: {
     visualSignature: string;
     shots: {
@@ -71,6 +72,15 @@ for (const entry of imageEntries) {
 const saved = JSON.parse(fs.readFileSync(analysisPath, "utf8")) as SavedAnalysis;
 const { visualSignature, shots } = saved.analysis;
 
+/**
+ * La pub générée doit reproduire les dimensions de la vidéo de référence :
+ * référence verticale → pub verticale, référence paysage → pub paysage.
+ */
+const targetFormat =
+  saved.video?.width && saved.video?.height
+    ? { width: saved.video.width, height: saved.video.height }
+    : undefined;
+
 const outputPath = path.resolve(
   outputArg ?? path.join(process.env.HOME ?? ".", "Desktop", "pub-generee.mp4"),
 );
@@ -81,6 +91,13 @@ const elapsed = () => `${((Date.now() - started) / 1000).toFixed(0)}s`.padStart(
 // Récapitulatif AVANT de dépenser quoi que ce soit.
 console.log(`\n${"═".repeat(70)}`);
 console.log(`${shots.length} plans · modèle « ${model} » · ${imageEntries.length} image(s)`);
+console.log(
+  targetFormat
+    ? `Format cible : ${targetFormat.width}×${targetFormat.height} (celui de la référence, ${
+        targetFormat.width > targetFormat.height ? "paysage" : "vertical"
+      })`
+    : "⚠️  Format de la référence inconnu — le format du premier clip sera utilisé",
+);
 console.log(`Coût estimé : ~${(shots.length * 6.5).toFixed(0)} crédits`);
 console.log("═".repeat(70));
 shots.forEach((s, i) => {
@@ -100,10 +117,12 @@ async function main() {
       prepared.push(entry);
       continue;
     }
-    const p = await prepareProductImage(entry, workDir);
+    const p = await prepareProductImage(entry, workDir, targetFormat);
     console.log(
       `[${elapsed()}] 🖼 ${path.basename(entry)} ${p.originalWidth}×${p.originalHeight}` +
-        (p.unchanged ? " (déjà 9:16)" : ` → 1080×1920, marges ${p.backgroundColor}`),
+        (p.unchanged
+          ? " (déjà au bon format)"
+          : ` → ${p.outputWidth}×${p.outputHeight}, marges ${p.backgroundColor}`),
     );
     prepared.push(p.filePath);
   }
@@ -116,6 +135,7 @@ async function main() {
   const result = await generateVideo({
     visualSignature,
     model,
+    targetFormat,
     shots: shots.map((s) => ({
       durationSeconds: s.durationSeconds,
       motionPrompt: s.motionPrompt,

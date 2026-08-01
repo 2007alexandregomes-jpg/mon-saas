@@ -9,16 +9,17 @@ import { run } from "./run";
  *
  * Pourquoi c'est indispensable : Higgsfield calque le format de la vidéo sur
  * celui de l'image d'entrée. Cinq photos aux proportions différentes donnent
- * donc cinq clips de dimensions différentes, impossibles à monter ensemble —
- * et, si les photos sont en paysage, une publicité en paysage alors qu'un
- * TikTok se regarde à la verticale.
+ * donc cinq clips de dimensions différentes, impossibles à monter ensemble.
+ *
+ * Le format cible est celui de la VIDÉO DE RÉFÉRENCE : une pub verticale se
+ * copie en vertical, une pub paysage en paysage.
  *
  * On complète donc chaque photo avec des marges de la couleur de son propre
  * fond, plutôt que de la recadrer : recadrer une photo produit couperait le
  * produit.
  */
 
-/** 9:16, le format de TikTok, des Reels et des Shorts. */
+/** Repli quand le format de la référence est inconnu : 9:16, celui de TikTok. */
 export const VERTICAL_9_16 = { width: 1080, height: 1920 } as const;
 
 export type ImageFormat = { width: number; height: number };
@@ -76,8 +77,10 @@ export type PreparedImage = {
   filePath: string;
   originalWidth: number;
   originalHeight: number;
+  outputWidth: number;
+  outputHeight: number;
   backgroundColor: string;
-  /** Vrai si l'image était déjà au bon format et n'a pas été touchée. */
+  /** Vrai si l'image avait déjà les bonnes proportions. */
   unchanged: boolean;
 };
 
@@ -110,10 +113,14 @@ export async function prepareProductImage(
 
   const backgroundColor = await detectBackgroundColor(inputPath);
 
+  // Les encodeurs vidéo exigent des dimensions paires.
+  const even = (n: number) => (n % 2 === 0 ? n : n - 1);
+  format = { width: even(format.width), height: even(format.height) };
+
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(
     outputDir,
-    `${path.basename(inputPath, path.extname(inputPath))}-9x16.png`,
+    `${path.basename(inputPath, path.extname(inputPath))}-${format.width}x${format.height}.png`,
   );
 
   await run(
@@ -140,6 +147,8 @@ export async function prepareProductImage(
     filePath: outputPath,
     originalWidth,
     originalHeight,
+    outputWidth: format.width,
+    outputHeight: format.height,
     backgroundColor,
     unchanged: Math.abs(ratio - target) < 0.01,
   };

@@ -79,11 +79,14 @@ export async function generateVideo({
   shots,
   visualSignature,
   model = "turbo",
+  targetFormat,
   onEvent,
 }: {
   shots: ShotToGenerate[];
   visualSignature: string;
   model?: ShotModel;
+  /** Dimensions de la vidéo de référence, que la pub doit reproduire. */
+  targetFormat?: { width: number; height: number };
   onEvent?: (event: GenerationEvent) => void;
 }): Promise<GenerationResult> {
   if (shots.length === 0) {
@@ -142,6 +145,7 @@ export async function generateVideo({
         durationSeconds: shots[g.index].durationSeconds,
       })),
       outputPath,
+      targetFormat,
     );
 
     onEvent?.({
