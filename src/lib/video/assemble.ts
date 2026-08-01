@@ -123,14 +123,29 @@ export async function assembleVideo(
   // Pour chaque entrée : couper à la bonne durée, remettre l'horodatage à zéro
   // (`setpts` — sans ça le second clip commencerait à 5 s et ffmpeg insérerait
   // un blanc), puis normaliser format, cadence et rapport de pixels.
+  const targetRatio = width / height;
+
   const filters = segments
-    .map(
-      (s, i) =>
+    .map((s, i) => {
+      const clipRatio = s.width / s.height;
+      const drift = Math.abs(clipRatio - targetRatio) / targetRatio;
+
+      // Higgsfield rend souvent des dimensions voisines mais pas identiques
+      // (1280×704 pour une cible 1282×720). Ajouter des bandes noires pour
+      // 2 % d'écart serait pire que le mal : on rogne un filet, invisible,
+      // plutôt que d'encadrer l'image. Au-delà, le recadrage couperait le
+      // produit — on préfère alors les bandes.
+      const fit =
+        drift < 0.05
+          ? `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`
+          : `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+            `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+
+      return (
         `[${i}:v]trim=start=0:end=${s.duration.toFixed(3)},setpts=PTS-STARTPTS,` +
-        `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
-        `setsar=1,fps=30,format=yuv420p[v${i}]`,
-    )
+        `${fit},setsar=1,fps=30,format=yuv420p[v${i}]`
+      );
+    })
     .join(";");
 
   const concatInputs = segments.map((_, i) => `[v${i}]`).join("");

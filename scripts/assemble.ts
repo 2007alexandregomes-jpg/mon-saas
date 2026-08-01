@@ -44,11 +44,18 @@ if (clips.length === 0) {
 
 /** Les durées viennent de l'analyse si elle est fournie, sinon clip entier. */
 let durations: (number | undefined)[] = clips.map(() => undefined);
+/** Le format de la référence, que la pub doit reproduire. */
+let targetFormat: { width: number; height: number } | undefined;
+
 if (analysisPath && fs.existsSync(analysisPath)) {
   const saved = JSON.parse(fs.readFileSync(analysisPath, "utf8")) as {
+    video?: { width: number | null; height: number | null };
     analysis: { shots: { durationSeconds: number }[] };
   };
   durations = saved.analysis.shots.map((s) => s.durationSeconds);
+  if (saved.video?.width && saved.video?.height) {
+    targetFormat = { width: saved.video.width, height: saved.video.height };
+  }
 }
 
 const outputPath = path.resolve(
@@ -67,14 +74,21 @@ async function main() {
     );
   }
 
-  console.log("\n🎬 assemblage…");
+  console.log(
+    targetFormat
+      ? `\n🎬 assemblage en ${targetFormat.width}×${targetFormat.height} (format de la référence)…`
+      : "\n🎬 assemblage (format du premier clip)…",
+  );
   const result = await assembleVideo(
     clips.map((filePath, i) => ({ filePath, durationSeconds: durations[i] })),
     outputPath,
+    targetFormat,
   );
 
   console.log(`\n✅ ${result.outputPath}`);
-  console.log(`   ${result.durationSeconds.toFixed(1)} s · ${clips.length} plans`);
+  console.log(
+    `   ${result.durationSeconds.toFixed(1)} s · ${result.width}×${result.height} · ${clips.length} plans`,
+  );
 }
 
 main().catch((error) => {
