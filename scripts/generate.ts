@@ -19,6 +19,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { generateVideo } from "../src/lib/pipeline/generate-video";
 import { resolveImageUrls } from "../src/lib/higgsfield/upload";
+import { prepareProductImage } from "../src/lib/video/prepare-image";
+import os from "node:os";
 import type { ShotModel } from "../src/lib/higgsfield/generate-shot";
 
 type SavedAnalysis = {
@@ -88,8 +90,26 @@ shots.forEach((s, i) => {
 console.log();
 
 async function main() {
+  // Higgsfield calque le format de la vidéo sur celui de l'image d'entrée :
+  // des photos aux proportions différentes donneraient des clips impossibles
+  // à monter ensemble. On les met toutes en 9:16 d'abord.
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "hf-prepare-"));
+  const prepared: string[] = [];
+  for (const entry of imageEntries) {
+    if (/^https?:\/\//i.test(entry)) {
+      prepared.push(entry);
+      continue;
+    }
+    const p = await prepareProductImage(entry, workDir);
+    console.log(
+      `[${elapsed()}] 🖼 ${path.basename(entry)} ${p.originalWidth}×${p.originalHeight}` +
+        (p.unchanged ? " (déjà 9:16)" : ` → 1080×1920, marges ${p.backgroundColor}`),
+    );
+    prepared.push(p.filePath);
+  }
+
   // Les fichiers locaux sont téléversés ; les URL sont gardées telles quelles.
-  const imageUrls = await resolveImageUrls(imageEntries, (file) =>
+  const imageUrls = await resolveImageUrls(prepared, (file) =>
     console.log(`[${elapsed()}] ⬆ téléversement de ${path.basename(file)}…`),
   );
 
