@@ -216,9 +216,19 @@ export async function remakeVideo({
             shot.filePath,
             `plan-${p.index}-${Date.now()}.mp4`,
           );
+          // Clause ajoutée systématiquement : même quand Claude oublie de le
+          // demander, aucun texte ni logo du concurrent ne doit subsister —
+          // ce serait diffuser sa marque dans la publicité du client.
+          const effacement = p.overlaidText
+            ? `Remove the overlaid text and logo "${p.overlaidText}" completely, ` +
+              "leaving only the clean background behind it. "
+            : "Remove any overlaid text, watermark, logo or brand name. ";
+
           const id = await submitEdit({
             videoUrl: publicUrl,
-            prompt: `${p.editPrompt} The product is: ${plan.productDescription}`,
+            prompt:
+              `${p.editPrompt} ${effacement}` +
+              `The product is: ${plan.productDescription}`,
             imageUrls: productImageUrls,
           });
           const resultUrl = await waitForEdit(id);

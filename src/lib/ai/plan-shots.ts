@@ -27,6 +27,12 @@ const PlanSchema = z.object({
       content: z
         .string()
         .describe("En FRANÇAIS : ce qu'on voit dans ce plan, en une phrase"),
+      overlaidText: z
+        .string()
+        .describe(
+          "Le texte, logo ou filigrane visible en surimpression dans ce plan, tel que tu le lis. " +
+            "Chaîne VIDE s'il n'y en a pas. Sert à demander explicitement son effacement.",
+        ),
       treatment: z
         .enum(TREATMENTS)
         .describe(
@@ -84,6 +90,14 @@ QUATRE TRAITEMENTS
 - \`card\` — carton-titre, logo, texte plein cadre appartenant au concurrent. À remplacer par celui du client. On ne peut évidemment pas conserver la marque d'un concurrent dans une publicité.
 
 - \`drop\` — plan qui ne montre pas le produit et n'apporte rien, ou image composite de plusieurs panneaux (le modèle d'édition n'en traite qu'un seul et rate les autres).
+
+TEXTES ET LOGOS INCRUSTÉS — point crucial
+
+Beaucoup de plans portent en surimpression le nom, le logo ou un slogan du concurrent. Les laisser reviendrait à diffuser sa marque dans la publicité du client : c'est inacceptable.
+
+Quand tu vois du texte, un logo ou un filigrane dans un plan, DIS-LE explicitement dans la consigne d'édition : « Remove the overlaid text and logo completely, leaving only the clean background. » Nomme le texte que tu vois, pour que le modèle sache quoi effacer.
+
+Si un plan n'est QUE du texte ou un logo plein cadre, ce n'est pas une édition : c'est un \`card\`.
 
 RÉDACTION DES CONSIGNES D'ÉDITION (en anglais)
 
