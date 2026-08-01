@@ -9,7 +9,8 @@
     "lint": "eslint",
     "analyze": "tsx --env-file=.env.local scripts/analyze.ts",
     "generate": "tsx --env-file=.env.local scripts/generate.ts",
-    "assemble": "tsx --env-file=.env.local scripts/assemble.ts"
+    "assemble": "tsx --env-file=.env.local scripts/assemble.ts",
+    "remake": "tsx --env-file=.env.local scripts/remake.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
