@@ -10,12 +10,21 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { assembleVideo, probeDuration, probeVideoStream } from "../src/lib/video/assemble";
+import {
+  addSoundtrack,
+  assembleVideo,
+  probeDuration,
+  probeVideoStream,
+} from "../src/lib/video/assemble";
 
 const args = process.argv.slice(2);
 const outFlag = args.indexOf("--out");
 const outputArg = outFlag === -1 ? undefined : args[outFlag + 1];
-const positional = args.filter((a) => !a.startsWith("--") && a !== outputArg);
+const audioFlag = args.indexOf("--audio");
+const audioPath = audioFlag === -1 ? undefined : args[audioFlag + 1];
+const positional = args.filter(
+  (a) => !a.startsWith("--") && a !== outputArg && a !== audioPath,
+);
 const [clipsDir, analysisPath] = positional;
 
 if (!clipsDir) {
@@ -84,6 +93,15 @@ async function main() {
     outputPath,
     targetFormat,
   );
+
+  if (audioPath) {
+    console.log(`🔊 ajout de la piste ${path.basename(audioPath)}…`);
+    // ffmpeg ne peut pas écrire dans le fichier qu'il lit : on passe par un
+    // fichier intermédiaire avant de remplacer.
+    const temp = result.outputPath.replace(/\.mp4$/, "-son.mp4");
+    await addSoundtrack(result.outputPath, audioPath, temp);
+    fs.renameSync(temp, result.outputPath);
+  }
 
   console.log(`\n✅ ${result.outputPath}`);
   console.log(

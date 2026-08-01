@@ -3,6 +3,7 @@
  *
  *   npm run analyze  -- "<lien>" "<produit>" "<desc>" --save analyse.json
  *   npm run generate -- analyse.json --images photo1.jpg photo2.jpg [--model turbo]
+ *                       [--audio musique.mp3]
  *
  * `--images` accepte des CHEMINS DE FICHIERS ou des URL. Les fichiers locaux
  * sont téléversés automatiquement — Higgsfield ne sait télécharger l'image de
@@ -20,6 +21,7 @@ import path from "node:path";
 import { generateVideo } from "../src/lib/pipeline/generate-video";
 import { resolveImageUrls } from "../src/lib/higgsfield/upload";
 import { prepareProductImage } from "../src/lib/video/prepare-image";
+import { addSoundtrack } from "../src/lib/video/assemble";
 import os from "node:os";
 import type { ShotModel } from "../src/lib/higgsfield/generate-shot";
 
@@ -47,6 +49,8 @@ function flagValues(name: string): string[] {
 const imageEntries = flagValues("--images");
 const model = (flagValues("--model")[0] ?? "turbo") as ShotModel;
 const outputArg = flagValues("--out")[0];
+/** `--audio musique.mp3` : piste sonore ajoutée à la vidéo finale. */
+const audioPath = flagValues("--audio")[0];
 
 const firstFlag = args.findIndex((a) => a.startsWith("--"));
 const analysisPath = (firstFlag === -1 ? args : args.slice(0, firstFlag))[0];
@@ -59,6 +63,10 @@ if (!analysisPath || imageEntries.length === 0) {
 }
 if (!fs.existsSync(analysisPath)) {
   console.error(`❌ Fichier introuvable : ${analysisPath}`);
+  process.exit(1);
+}
+if (audioPath && !fs.existsSync(audioPath)) {
+  console.error(`❌ Fichier audio introuvable : ${audioPath}`);
   process.exit(1);
 }
 
@@ -162,13 +170,23 @@ async function main() {
     },
   });
 
-  fs.copyFileSync(result.outputPath, outputPath);
+  if (audioPath) {
+    console.log(`[${elapsed()}] 🔊 ajout de la piste ${path.basename(audioPath)}…`);
+    const withSound = await addSoundtrack(
+      result.outputPath,
+      audioPath,
+      result.outputPath.replace(/\.mp4$/, "-son.mp4"),
+    );
+    fs.copyFileSync(withSound.outputPath, outputPath);
+  } else {
+    fs.copyFileSync(result.outputPath, outputPath);
+  }
   await result.cleanup();
 
   console.log(`\n${"═".repeat(70)}`);
   console.log(`✅ Vidéo prête : ${outputPath}`);
   console.log(
-    `   ${result.durationSeconds.toFixed(1)} s · ${result.shots.length}/${shots.length} plans · ` +
+    `   ${result.durationSeconds.toFixed(1)} s · ${audioPath ? "avec son · " : "MUETTE · "}${result.shots.length}/${shots.length} plans · ` +
       `${((Date.now() - started) / 1000 / 60).toFixed(1)} min · ` +
       `~${(result.shots.length * 6.5).toFixed(0)} crédits`,
   );

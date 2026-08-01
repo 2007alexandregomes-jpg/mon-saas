@@ -93,6 +93,30 @@ const AnalysisSchema = z.object({
         ),
     }),
   ),
+  /**
+   * La bande son de la référence.
+   *
+   * On ne l'embarque JAMAIS dans la vidéo générée — ce serait une contrefaçon,
+   * et l'algorithme de TikTok ne la reconnaîtrait pas comme un son tendance.
+   * On dit simplement au client quoi chercher au moment de publier.
+   */
+  soundtrack: z.object({
+    description: z
+      .string()
+      .describe(
+        "En FRANÇAIS : ce qu'on entend (genre, tempo, énergie, montée…) et le rôle que ça joue dans la pub",
+      ),
+    identifiedTrack: z
+      .string()
+      .describe(
+        "« Titre — Artiste » si tu reconnais le morceau d'après les paroles transcrites. Chaîne VIDE si tu n'es pas sûr : une fausse identification est pire que rien.",
+      ),
+    searchSuggestion: z
+      .string()
+      .describe(
+        "En FRANÇAIS : quoi taper dans la recherche de sons TikTok pour trouver un morceau équivalent (genre, ambiance, tempo)",
+      ),
+  }),
   notes: z
     .string()
     .describe("Ce qui rend cette publicité efficace, en une ou deux phrases"),
@@ -122,7 +146,8 @@ Ton travail :
 2. Décrire précisément le style visuel : mouvements de caméra, éclairage, rythme, mise en scène.
 3. Reconstituer la structure de la référence (accroche, partie centrale, conclusion) en croisant TROIS sources : la transcription, le texte incrusté, le titre/description. Cite le phrasé réel de l'accroche quand il existe — c'est ce qui fait s'arrêter le pouce.
 4. Adapter cette structure au produit du client.
-5. Découper l'adaptation en PLANS pour la génération vidéo (voir ci-dessous).
+5. Décrire la bande son dans \`soundtrack\`, pour que le client sache quoi choisir au moment de publier. La musique n'est jamais copiée dans la vidéo générée : sur TikTok on choisit le son dans l'application, et un son tendance porte l'algorithme mieux qu'un fichier importé.
+6. Découper l'adaptation en PLANS pour la génération vidéo (voir ci-dessous).
 
 DÉCOUPAGE EN PLANS — point technique important
 

@@ -185,6 +185,75 @@ export async function assembleVideo(
   };
 }
 
+/**
+ * Ajoute une piste audio à une vidéo déjà montée.
+ *
+ * L'audio est coupé à la durée exacte de la vidéo, avec une ouverture et une
+ * fermeture en fondu : une musique qui s'arrête net en fin de plan s'entend
+ * immédiatement comme un montage bâclé.
+ *
+ * La vidéo n'est PAS ré-encodée (`-c:v copy`) : elle l'a déjà été à
+ * l'assemblage, un second passage ne ferait que dégrader l'image.
+ */
+export async function addSoundtrack(
+  videoPath: string,
+  audioPath: string,
+  outputPath: string,
+  { fadeSeconds = 1 }: { fadeSeconds?: number } = {},
+): Promise<{ outputPath: string; durationSeconds: number }> {
+  if (!ffmpegPath) {
+    throw new Error("ffmpeg est introuvable (paquet ffmpeg-static absent ?).");
+  }
+
+  const videoDuration = await probeDuration(videoPath);
+  const audioDuration = await probeDuration(audioPath);
+
+  if (audioDuration <= 0) {
+    throw new Error(`Fichier audio illisible : ${path.basename(audioPath)}`);
+  }
+
+  const fadeOutStart = Math.max(0, videoDuration - fadeSeconds);
+
+  // Une musique plus courte que la vidéo est bouclée plutôt que de laisser un
+  // silence : `-stream_loop -1` boucle, `-shortest` coupe à la fin de la vidéo.
+  const needsLoop = audioDuration < videoDuration;
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  await run(
+    ffmpegPath,
+    [
+      "-i",
+      videoPath,
+      ...(needsLoop ? ["-stream_loop", "-1"] : []),
+      "-i",
+      audioPath,
+      "-filter_complex",
+      `[1:a]atrim=0:${videoDuration.toFixed(3)},asetpts=PTS-STARTPTS,` +
+        `afade=t=in:st=0:d=${Math.min(fadeSeconds, videoDuration / 4).toFixed(2)},` +
+        `afade=t=out:st=${fadeOutStart.toFixed(3)}:d=${fadeSeconds}[a]`,
+      "-map",
+      "0:v",
+      "-map",
+      "[a]",
+      "-c:v",
+      "copy", // l'image a déjà été encodée : ne pas y retoucher
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      "-shortest",
+      "-movflags",
+      "+faststart",
+      "-y",
+      outputPath,
+    ],
+    { timeoutMs: 300_000 },
+  );
+
+  return { outputPath, durationSeconds: videoDuration };
+}
+
 /** Télécharge un clip généré vers un fichier local. */
 export async function downloadClip(
   url: string,
