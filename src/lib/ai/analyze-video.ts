@@ -136,6 +136,20 @@ Produis entre 3 et 6 plans, dont les durées additionnées correspondent à la d
 
 Écris \`referenceImage\`, \`motionPrompt\` et \`visualSignature\` en anglais. \`description\` en français.
 
+CONTRAINTE MAJEURE — la signature visuelle doit être ATTEIGNABLE depuis les photos du client
+
+Le modèle vidéo part de la photo fournie et la transforme. Plus le style demandé est éloigné de cette photo, plus le modèle passe de temps à « traverser » d'un monde à l'autre : sur un clip de 5 s, une bascule fond blanc → fond noir consomme les 3 premières secondes. Le plan devient inutilisable.
+
+Regarde donc les photos produit fournies et choisis une signature visuelle COMPATIBLE avec elles :
+
+- Photos sur fond clair ou blanc (packshot e-commerce classique) → vise un rendu CLAIR et premium : "seamless soft white-to-light-grey gradient background, soft even key light, gentle contact shadow, high-key look". Ne demande NI fond noir, NI ambiance nocturne, NI éclairage dramatique sombre.
+- Photos sur fond sombre ou en ambiance → là seulement, un rendu cinématique sombre est envisageable.
+- Photos en situation (produit tenu en main, en extérieur) → reste dans ce registre.
+
+Tu peux toujours reprendre le RYTHME, le DÉCOUPAGE, les MOUVEMENTS de caméra et la STRUCTURE de la référence : c'est ce qui fait son efficacité. C'est uniquement l'ambiance lumineuse qui doit rester atteignable. Une pub sombre peut parfaitement être transposée en pub claire sans rien perdre de son montage.
+
+Si aucune photo n'est fournie, pars du principe qu'elles sont sur fond blanc et vise un rendu clair.
+
 PIÈGES DE RÉDACTION DES PROMPTS ANGLAIS — à respecter strictement
 
 Le modèle vidéo prend les mots au pied de la lettre et rend ce qu'il lit.
